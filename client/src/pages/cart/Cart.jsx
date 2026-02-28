@@ -1,6 +1,5 @@
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { DeleteOutlined } from '@ant-design/icons';
 import { Button, Empty, Form, Input, message, Modal, Select, Table, InputNumber } from 'antd';
-import FormItem from 'antd/lib/form/FormItem';
 import axios from 'axios';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
@@ -9,124 +8,50 @@ import Layout from '../../components/Layout';
 import './cart.css';
 
 const Cart = () => {
-    const [userId, setUserId] = useState(() => {
-        const auth = localStorage.getItem('auth');
-        return auth ? JSON.parse(auth)._id : null;
-    });
+    const dispatch = useDispatch();
+    const navigate = useNavigate();
+    const { cartItems } = useSelector(state => state.rootReducer);
 
-    useEffect(() => {
-        const auth = localStorage.getItem('auth');
-        if (auth) setUserId(JSON.parse(auth)._id);
-    }, []);
+    const auth = JSON.parse(localStorage.getItem('auth'));
+    const userId = auth?._id;
 
     const [subTotal, setSubTotal] = useState(0);
     const [billPopUp, setBillPopUp] = useState(false);
     const [form] = Form.useForm();
 
-    const dispatch = useDispatch();
-    const navigate = useNavigate();
+    const [paidTotal, setPaidTotal] = useState(0);
 
-    const { cartItems } = useSelector(state => state.rootReducer);
-
-    // Modal editar tallas
-    const [editSizesOpen, setEditSizesOpen] = useState(false);
-    const [editingItem, setEditingItem] = useState(null);
-    const [qtyBySize, setQtyBySize] = useState({});
-
-    const normalize = (arr = []) =>
+    // ===== Helpers =====
+    const normalizeSizeOrders = (arr = []) =>
         Array.isArray(arr)
             ? arr
                   .map(x => ({ size: String(x?.size ?? '').trim(), quantity: Number(x?.quantity || 0) }))
                   .filter(x => x.size && x.quantity > 0)
             : [];
 
-    const sizeSummary = item => {
-        const arr = normalize(item?.sizeOrders);
-        if (!arr.length) return '-';
-        return arr.map(x => `${x.size}: ${x.quantity}`).join(' | ');
-    };
-
-    const openEditSizes = item => {
-        setEditingItem(item);
-        const map = {};
-        normalize(item?.sizeOrders).forEach(o => (map[String(o.size)] = Number(o.quantity || 0)));
-        setQtyBySize(map);
-        setEditSizesOpen(true);
-    };
-
-    const closeEditSizes = () => {
-        setEditSizesOpen(false);
-        setEditingItem(null);
-        setQtyBySize({});
-    };
-
-    const sizeStocksOfEditing = useMemo(() => {
-        return Array.isArray(editingItem?.sizeStocks) ? editingItem.sizeStocks : [];
-    }, [editingItem]);
-
-    const saveEditedSizes = () => {
-        if (!editingItem?._id) return;
-
-        const sizeOrders = Object.entries(qtyBySize)
-            .map(([size, quantity]) => ({ size: String(size), quantity: Number(quantity || 0) }))
-            .filter(x => x.quantity > 0);
-
-        if (!sizeOrders.length) {
-            message.error('Selecciona al menos una talla');
-            return;
-        }
-
-        // validar stock real por talla
-        for (const row of sizeOrders) {
-            const found = sizeStocksOfEditing.find(s => String(s.size) === String(row.size));
-            const avail = Number(found?.stock || 0);
-            if (row.quantity > avail) {
-                message.error(`Has superado el stock en talla ${row.size}`);
-                return;
-            }
-        }
-
-        dispatch({ type: 'UPDATE_CART_SIZES', payload: { _id: editingItem._id, sizeOrders } });
-        message.success('Tallas actualizadas');
-        closeEditSizes();
-    };
-
-    const handlerDelete = record => {
-        dispatch({ type: 'DELETE_FROM_CART', payload: record });
-    };
-
+    // subtotal sugerido (precio normal)
     useEffect(() => {
         let temp = 0;
         cartItems.forEach(p => {
             temp += Number(p.price || 0) * Number(p.quantity || 0);
         });
-        setSubTotal(temp);
+        const st = Number(temp.toFixed(2));
+        setSubTotal(st);
+        setPaidTotal(st);
     }, [cartItems]);
+
+    const discount = useMemo(() => Number((subTotal - paidTotal).toFixed(2)), [subTotal, paidTotal]);
+
+    const handlerDelete = record => {
+        dispatch({ type: 'DELETE_FROM_CART', payload: record });
+    };
 
     const columns = [
         { title: 'Nombre', dataIndex: 'name' },
         {
-            title: 'Imagen',
-            dataIndex: 'image',
-            render: (image, record) => <img src={image} alt={record.name} height={60} width={60} />,
-        },
-        {
             title: 'Precio',
             dataIndex: 'price',
             render: price => <strong>${price}</strong>,
-        },
-        {
-            title: 'Tallas',
-            render: (_, record) => (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span>{sizeSummary(record)}</span>
-                    {normalize(record?.sizeOrders).length > 0 && (
-                        <Button size="small" icon={<EditOutlined />} onClick={() => openEditSizes(record)}>
-                            Editar
-                        </Button>
-                    )}
-                </div>
-            ),
         },
         {
             title: 'Cantidad',
@@ -139,104 +64,182 @@ const Cart = () => {
         },
     ];
 
-    const handlerSubmit = async value => {
+    // ===== Descuento de stock por talla =====
+    const applySizeDecrement = (currentSizeStocks, sizeOrders) => {
+        const map = new Map();
+        (currentSizeStocks || []).forEach(s => map.set(String(s.size), Number(s.stock || 0)));
+
+        for (const row of sizeOrders) {
+            const size = String(row.size);
+            const qty = Number(row.quantity || 0);
+            const prev = map.get(size) ?? 0;
+            map.set(size, Math.max(0, prev - qty));
+        }
+
+        const newSizeStocks = Array.from(map.entries()).map(([size, stock]) => ({ size, stock }));
+        const total = newSizeStocks.reduce((sum, x) => sum + Number(x.stock || 0), 0);
+        return { newSizeStocks, total };
+    };
+
+    // ===== Agrupar items por producto (para descontar M y XL del mismo producto bien) =====
+    const groupCartByProduct = () => {
+        const map = new Map();
+
+        for (const item of cartItems) {
+            const pid = String(item._id);
+            if (!map.has(pid)) {
+                map.set(pid, {
+                    productId: pid,
+                    name: item.name,
+                    hasSizes: Array.isArray(item.sizeStocks) && item.sizeStocks.length > 0,
+                    sizeStocks: item.sizeStocks || [],
+                    sizeOrders: [],
+                    totalQty: 0,
+                    stock: Number(item.stock || 0),
+                });
+            }
+
+            const g = map.get(pid);
+            g.totalQty += Number(item.quantity || 0);
+
+            const so = normalizeSizeOrders(item.sizeOrders);
+            if (so.length) g.sizeOrders.push(...so);
+        }
+
+        // consolidar sizeOrders por talla
+        const grouped = [];
+        for (const g of map.values()) {
+            if (g.sizeOrders.length) {
+                const m = new Map();
+                g.sizeOrders.forEach(o => {
+                    const key = String(o.size);
+                    m.set(key, (m.get(key) || 0) + Number(o.quantity || 0));
+                });
+                g.sizeOrders = Array.from(m.entries()).map(([size, quantity]) => ({ size, quantity }));
+            }
+            grouped.push(g);
+        }
+        return grouped;
+    };
+
+    // ===== Autocompletar cliente por cédula =====
+    const autoFillByCedula = async cedula => {
+        const clean = String(cedula || '').trim();
+        if (!clean || !userId) return;
+
+        try {
+            const { data } = await axios.get('/api/customers/get-customer-by-cedula', {
+                params: { cedula: clean, createdBy: userId },
+            });
+
+            if (data?.customer) {
+                form.setFieldsValue({
+                    name: data.customer.name,
+                    phone: String(data.customer.phone || ''),
+                    address: data.customer.address,
+                });
+                message.success('Cliente encontrado ✅');
+            }
+        } catch (err) {
+            console.log(err);
+        }
+    };
+
+    const handlerSubmit = async values => {
         try {
             if (!userId) {
-                message.error('Error de autenticación. Inicia sesión nuevamente.');
+                message.error('Error de autenticación');
                 return;
             }
 
-            // ✅ validación tallas obligatoria si el producto tiene sizeStocks
-            for (const item of cartItems) {
-                const productHasSizes = Array.isArray(item?.sizeStocks) && item.sizeStocks.length > 0;
-                const selected = normalize(item?.sizeOrders);
+            const sellerCode = String(values.sellerCode || '').replace(/\D/g, '').slice(0, 5);
+            if (sellerCode.length !== 5) {
+                message.error('El código del vendedor debe tener 5 dígitos');
+                return;
+            }
 
-                if (productHasSizes && selected.length === 0) {
+            if (!Number.isFinite(Number(paidTotal)) || Number(paidTotal) <= 0) {
+                message.error('El precio a pagar debe ser mayor a 0');
+                return;
+            }
+
+            if (Number(paidTotal) > Number(subTotal)) {
+                message.error('El precio a pagar no puede ser mayor al sugerido');
+                return;
+            }
+
+            // validar tallas si aplica
+            for (const item of cartItems) {
+                const hasSizes = Array.isArray(item?.sizeStocks) && item.sizeStocks.length > 0;
+                const selected = normalizeSizeOrders(item?.sizeOrders);
+                if (hasSizes && selected.length === 0) {
                     message.error(`Faltan tallas seleccionadas en: ${item?.name || 'Producto'}`);
                     return;
                 }
             }
 
-            const newObject = {
-                customerCedula: value.cedula,
-                customerName: value.name,
-                customerPhone: Number(value.phone),
-                customerAddress: value.address,
-                cartItems,
-                subTotal: Number(subTotal.toFixed(2)),
-                tax: 0,
-                totalAmount: Number(subTotal.toFixed(2)),
-                paymentMethod: value.paymentMethod,
+            // ✅ 0) asegurar cliente en BD (si existe se actualiza, si no se crea)
+            await axios.post('/api/customers/add-customers', {
+                cedula: values.cedula,
+                name: values.name,
+                phone: Number(values.phone),
+                address: values.address,
                 createdBy: userId,
+            });
+
+            const payload = {
+                createdBy: userId,
+                sellerCode,
+
+                customerCedula: values.cedula,
+                customerName: values.name,
+                customerPhone: Number(values.phone),
+                customerAddress: values.address,
+
+                cartItems,
+                suggestedTotal: subTotal,
+                paidTotal: Number(Number(paidTotal).toFixed(2)),
+                discountAmount: discount,
+
+                paymentMethod: values.paymentMethod,
             };
-
-            // ✅ check stock por talla
-            for (const item of cartItems) {
-                const selected = normalize(item?.sizeOrders);
-                const currentSizeStocks = Array.isArray(item?.sizeStocks) ? item.sizeStocks : [];
-
-                if (currentSizeStocks.length) {
-                    for (const row of selected) {
-                        const found = currentSizeStocks.find(s => String(s.size) === String(row.size));
-                        const avail = Number(found?.stock || 0);
-                        if (row.quantity > avail) {
-                            message.error(`Solo hay ${avail} en stock para ${item.name} talla ${row.size}`);
-                            return;
-                        }
-                    }
-                } else {
-                    if (Number(item.stock || 0) < Number(item.quantity || 0)) {
-                        message.error(`Solo hay ${item.stock} en stock para ${item.name}`);
-                        return;
-                    }
-                }
-            }
 
             dispatch({ type: 'SHOW_LOADING' });
 
-            // Generar nota
-            await axios.post('/api/bills/addbills', newObject);
+            // 1) crear nota
+            const billRes = await axios.post('/api/bills/addbills', payload);
 
-            // ✅ actualizar stock por talla correctamente
-            for (const item of cartItems) {
-                const selected = normalize(item?.sizeOrders);
-                const currentSizeStocks = Array.isArray(item?.sizeStocks) ? item.sizeStocks : [];
+            // 2) descontar inventario (agrupado por producto y por talla)
+            const grouped = groupCartByProduct();
 
-                // Con tallas
-                if (currentSizeStocks.length && selected.length) {
-                    const updatedSizeStocks = currentSizeStocks.map(s => {
-                        const row = selected.find(x => String(x.size) === String(s.size));
-                        const dec = Number(row?.quantity || 0);
-                        return { ...s, stock: Math.max(0, Number(s.stock || 0) - dec) };
-                    });
+            for (const g of grouped) {
+                if (g.hasSizes && g.sizeOrders.length) {
+                    const { newSizeStocks, total } = applySizeDecrement(g.sizeStocks, g.sizeOrders);
 
-                    const newTotal = updatedSizeStocks.reduce((sum, x) => sum + Number(x.stock || 0), 0);
-
-                    // ✅ IMPORTANTE: productId REAL (no concatenado)
                     await axios.put('/api/products/updateproducts', {
-                        productId: item._id,
-                        sizeStocks: updatedSizeStocks,
-                        stock: newTotal,
+                        productId: g.productId,
+                        sizeStocks: newSizeStocks,
+                        stock: total,
                     });
                 } else {
-                    // Sin tallas
                     await axios.put('/api/products/updateproducts', {
-                        productId: item._id,
-                        stock: Math.max(0, Number(item.stock || 0) - Number(item.quantity || 0)),
+                        productId: g.productId,
+                        stock: Math.max(0, Number(g.stock || 0) - Number(g.totalQty || 0)),
                     });
                 }
             }
 
+            message.success(billRes.data?.message || 'Nota de venta generada');
+
+            // 3) limpiar y cerrar
             dispatch({ type: 'CLEAR_CART' });
             setBillPopUp(false);
             form.resetFields();
             dispatch({ type: 'HIDE_LOADING' });
-
-            message.success('Nota de venta generada correctamente');
             navigate('/bills');
         } catch (error) {
             dispatch({ type: 'HIDE_LOADING' });
-            message.error(error?.response?.data?.message || 'Error al generar nota de venta');
+            message.error(error.response?.data?.message || 'Error creating bill');
             console.log(error);
         }
     };
@@ -247,17 +250,18 @@ const Cart = () => {
 
             {cartItems.length === 0 ? (
                 <div className="empty-cart">
-                    <h2 className="empty-text">¡El carrito está vacío!</h2>
+                    <h2>Carrito vacío</h2>
                     <Empty />
                 </div>
             ) : (
                 <div>
-                    <Table dataSource={cartItems} columns={columns} bordered rowKey="_id" />
+                    <Table dataSource={cartItems} columns={columns} bordered rowKey={r => r.cartKey || r._id} />
 
                     <div className="subTotal">
                         <h2>
-                            Sub Total: <span>${subTotal.toFixed(2)}</span>
+                            Precio sugerido: <span>${subTotal.toFixed(2)}</span>
                         </h2>
+
                         <Button onClick={() => setBillPopUp(true)} className="add-new">
                             Generar nota de venta
                         </Button>
@@ -265,33 +269,57 @@ const Cart = () => {
 
                     <Modal title="Crear nota de venta" visible={billPopUp} onCancel={() => setBillPopUp(false)} footer={false}>
                         <Form layout="vertical" onFinish={handlerSubmit} form={form}>
-                            <FormItem name="cedula" label="Cédula o RUC" rules={[{ required: true, message: 'Ingresa cédula o RUC' }]}>
+                            <Form.Item
+                                name="sellerCode"
+                                label="Código del vendedor (5 dígitos)"
+                                rules={[{ required: true, message: 'Ingresa el código del vendedor' }]}
+                            >
+                                <Input maxLength={5} />
+                            </Form.Item>
+
+                            <Form.Item name="cedula" label="Cédula / RUC" rules={[{ required: true, message: 'Ingresa cédula o RUC' }]}>
+                                <Input onBlur={e => autoFillByCedula(e.target.value)} />
+                            </Form.Item>
+
+                            <Form.Item name="name" label="Nombre del cliente" rules={[{ required: true, message: 'Ingresa nombre' }]}>
                                 <Input />
-                            </FormItem>
+                            </Form.Item>
 
-                            <FormItem name="name" label="Nombre del cliente" rules={[{ required: true, message: 'Ingresa el nombre' }]}>
+                            <Form.Item name="phone" label="Teléfono" rules={[{ required: true, message: 'Ingresa teléfono' }]}>
                                 <Input />
-                            </FormItem>
+                            </Form.Item>
 
-                            <FormItem name="phone" label="Teléfono" rules={[{ required: true, message: 'Ingresa el teléfono' }]}>
-                                <Input prefix="+593" />
-                            </FormItem>
-
-                            <FormItem name="address" label="Dirección" rules={[{ required: true, message: 'Ingresa la dirección' }]}>
+                            <Form.Item name="address" label="Dirección" rules={[{ required: true, message: 'Ingresa dirección' }]}>
                                 <Input />
-                            </FormItem>
+                            </Form.Item>
 
-                            <Form.Item name="paymentMethod" label="Método de pago" rules={[{ required: true, message: 'Selecciona método de pago' }]}>
+                            <Form.Item name="paymentMethod" label="Método de pago" rules={[{ required: true, message: 'Selecciona método' }]}>
                                 <Select>
-                                    <Select.Option value="efectivo">Efectivo</Select.Option>
-                                    <Select.Option value="transferencia">Transferencia</Select.Option>
-                                    <Select.Option value="tarjeta">Tarjeta</Select.Option>
+                                    <Select.Option value="cash">Efectivo</Select.Option>
+                                    <Select.Option value="transfer">Transferencia</Select.Option>
+                                    <Select.Option value="card">Tarjeta</Select.Option>
                                 </Select>
                             </Form.Item>
 
-                            <div className="total">
-                                <span>SubTotal: ${subTotal.toFixed(2)}</span>
-                                <h3>Total: ${subTotal.toFixed(2)}</h3>
+                            <div style={{ marginTop: 10 }}>
+                                <p>
+                                    <b>Precio sugerido:</b> ${subTotal.toFixed(2)}
+                                </p>
+
+                                <p style={{ marginBottom: 6 }}>
+                                    <b>Precio a pagar (negociado):</b>
+                                </p>
+
+                                <InputNumber
+                                    min={0}
+                                    value={paidTotal}
+                                    onChange={val => setPaidTotal(Number(val || 0))}
+                                    style={{ width: '100%' }}
+                                />
+
+                                <p style={{ marginTop: 10 }}>
+                                    <b>Descuento aplicado:</b> ${discount.toFixed(2)}
+                                </p>
                             </div>
 
                             <div className="form-btn-add">
@@ -300,54 +328,6 @@ const Cart = () => {
                                 </Button>
                             </div>
                         </Form>
-                    </Modal>
-
-                    {/* Modal editar tallas */}
-                    <Modal
-                        title={`Editar tallas: ${editingItem?.name || ''}`}
-                        visible={editSizesOpen}
-                        onCancel={closeEditSizes}
-                        footer={false}
-                        width={520}
-                    >
-                        <Table
-                            dataSource={sizeStocksOfEditing.filter(x => Number(x.stock || 0) > 0)}
-                            columns={[
-                                { title: 'Talla', dataIndex: 'size' },
-                                { title: 'Disponible', dataIndex: 'stock' },
-                                {
-                                    title: 'Cantidad',
-                                    render: (_, record) => {
-                                        const size = String(record.size);
-                                        const max = Number(record.stock || 0);
-                                        const val = Number(qtyBySize[size] || 0);
-
-                                        return (
-                                            <InputNumber
-                                                min={0}
-                                                max={max}
-                                                value={val}
-                                                onChange={v => {
-                                                    const next = { ...qtyBySize, [size]: Number(v || 0) };
-                                                    if (!next[size]) delete next[size];
-                                                    setQtyBySize(next);
-                                                }}
-                                            />
-                                        );
-                                    },
-                                },
-                            ]}
-                            pagination={false}
-                            rowKey={r => String(r.size)}
-                            bordered
-                        />
-
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
-                            <Button onClick={closeEditSizes}>Cancelar</Button>
-                            <Button type="primary" onClick={saveEditedSizes}>
-                                Guardar
-                            </Button>
-                        </div>
                     </Modal>
                 </div>
             )}

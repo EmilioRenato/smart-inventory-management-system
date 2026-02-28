@@ -4,13 +4,16 @@ import { useDispatch } from 'react-redux';
 
 const Product = ({ product, enableSizeSelect = false }) => {
     const dispatch = useDispatch();
+    const { Meta } = Card;
 
-    const [open, setOpen] = useState(false);
+    const [modalVisible, setModalVisible] = useState(false);
     const [rows, setRows] = useState([]);
 
     const sizes = useMemo(() => {
         const list = Array.isArray(product?.sizeStocks) ? product.sizeStocks : [];
-        return list.filter(x => Number(x?.stock || 0) > 0);
+        return list
+            .map(x => ({ size: String(x.size), stock: Number(x.stock || 0) }))
+            .filter(x => x.size && x.stock > 0);
     }, [product]);
 
     const openModal = () => {
@@ -21,8 +24,8 @@ const Product = ({ product, enableSizeSelect = false }) => {
             return;
         }
 
-        // Si no quieres selección de tallas, agrega 1 item directo
-        if (!enableSizeSelect) {
+        // Si NO pedimos tallas, agrega 1 directo
+        if (!enableSizeSelect || !Array.isArray(product?.sizeStocks) || product.sizeStocks.length === 0) {
             dispatch({
                 type: 'ADD_TO_CART',
                 payload: { ...product, quantity: 1 },
@@ -31,7 +34,7 @@ const Product = ({ product, enableSizeSelect = false }) => {
             return;
         }
 
-        // Armar tabla de tallas disponibles
+        // Tabla de tallas
         const initial = sizes.map(s => ({
             key: String(s.size),
             size: String(s.size),
@@ -40,11 +43,11 @@ const Product = ({ product, enableSizeSelect = false }) => {
         }));
 
         setRows(initial);
-        setOpen(true);
+        setModalVisible(true);
     };
 
     const closeModal = () => {
-        setOpen(false);
+        setModalVisible(false);
         setRows([]);
     };
 
@@ -63,13 +66,17 @@ const Product = ({ product, enableSizeSelect = false }) => {
             }
         }
 
-        // Agrega 1 item por talla (así el carrito distingue tallas)
+        // 1 item por talla
         selected.forEach(r => {
+            const sizeOrders = [{ size: String(r.size), quantity: Number(r.qty) }];
+            const cartKey = `${product._id}|${String(r.size)}`;
+
             dispatch({
                 type: 'ADD_TO_CART',
                 payload: {
                     ...product,
-                    selectedSize: r.size,
+                    cartKey,
+                    sizeOrders,
                     quantity: Number(r.qty),
                 },
             });
@@ -78,8 +85,6 @@ const Product = ({ product, enableSizeSelect = false }) => {
         message.success('Agregado al carrito');
         closeModal();
     };
-
-    const { Meta } = Card;
 
     const columns = [
         { title: 'Talla', dataIndex: 'size' },
@@ -111,17 +116,17 @@ const Product = ({ product, enableSizeSelect = false }) => {
                 style={{ width: 240, marginBottom: 30 }}
                 cover={
                     <img
-                        alt={product?.name || 'producto'}
+                        alt={product?.name}
                         src={product?.image}
-                        style={{ height: 200, width: '100%', objectFit: 'cover' }}
+                        style={{ height: 200, objectFit: 'cover' }}
                         onError={e => {
                             e.currentTarget.src = 'https://via.placeholder.com/240x200?text=IMG';
                         }}
                     />
                 }
             >
-                <Meta title={product?.name || ''} />
-                <Meta title={`Precio: $${product?.price ?? ''}`} />
+                <Meta title={product?.name} />
+                <Meta title={`Precio: $${product?.price}`} />
 
                 <p>
                     Stock:{' '}
@@ -132,9 +137,7 @@ const Product = ({ product, enableSizeSelect = false }) => {
                     )}
                 </p>
 
-                {Number(product?.stock || 0) === 0 && (
-                    <Meta title="Estado:" description="Agotado" />
-                )}
+                {Number(product?.stock || 0) === 0 && <Meta title="Estado:" description="Sin stock" />}
 
                 <div className="product-btn">
                     <Button onClick={openModal}>Agregar al carrito</Button>
@@ -143,31 +146,18 @@ const Product = ({ product, enableSizeSelect = false }) => {
 
             <Modal
                 title={`Selecciona tallas: ${product?.name || ''}`}
-                visible={open}
+                visible={modalVisible}          // ✅ AntD v4 usa visible
                 onCancel={closeModal}
-                footer={false}
-                width={520}
-            >
-                <Table
-                    dataSource={rows}
-                    columns={columns}
-                    pagination={false}
-                    bordered
-                />
-
-                <div
-                    style={{
-                        display: 'flex',
-                        justifyContent: 'flex-end',
-                        marginTop: 12,
-                        gap: 8,
-                    }}
-                >
-                    <Button onClick={closeModal}>Cancelar</Button>
-                    <Button type="primary" onClick={addToCartWithSizes}>
+                footer={[
+                    <Button key="cancel" onClick={closeModal}>
+                        Cancelar
+                    </Button>,
+                    <Button key="ok" type="primary" onClick={addToCartWithSizes}>
                         Confirmar
-                    </Button>
-                </div>
+                    </Button>,
+                ]}
+            >
+                <Table dataSource={rows} columns={columns} pagination={false} rowKey="key" bordered />
             </Modal>
         </>
     );

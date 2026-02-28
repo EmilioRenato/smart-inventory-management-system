@@ -1,133 +1,122 @@
 import { DeleteOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons';
 import { Button, Form, Input, Modal, Table, message } from 'antd';
-import FormItem from 'antd/lib/form/FormItem';
 import axios from 'axios';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch } from 'react-redux';
 import Layout from '../../components/Layout';
 
 const Customers = () => {
-    const [userId, setUserId] = useState(() => {
-        const auth = localStorage.getItem('auth');
-        return auth ? JSON.parse(auth)._id : null;
-    });
-
     const dispatch = useDispatch();
+    const [form] = Form.useForm();
+
     const [customersData, setCustomersData] = useState([]);
     const [popModal, setPopModal] = useState(false);
     const [editCustomer, setEditCustomer] = useState(null);
+    const [search, setSearch] = useState('');
 
-    // Buscar por nombre (frontend)
-    const [searchName, setSearchName] = useState('');
-
-    const [form] = Form.useForm();
-
-    useEffect(() => {
-        const auth = localStorage.getItem('auth');
-        if (auth) setUserId(JSON.parse(auth)._id);
-    }, []);
-
+    // =============================
+    // GET CUSTOMERS (GLOBAL)
+    // =============================
     const getAllCustomers = async () => {
         try {
             dispatch({ type: 'SHOW_LOADING' });
 
-            const { data } = await axios.get('/api/customers/get-customers', {
-                params: { createdBy: userId },
-            });
+            const { data } = await axios.get('/api/customers/get-customers');
 
-            setCustomersData(data);
+            setCustomersData(Array.isArray(data) ? data : []);
+
             dispatch({ type: 'HIDE_LOADING' });
         } catch (error) {
             dispatch({ type: 'HIDE_LOADING' });
             console.log(error);
+            message.error('Error cargando clientes');
         }
     };
 
     useEffect(() => {
-        if (userId) getAllCustomers();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [userId]);
+        getAllCustomers();
+    }, []);
 
-    const handlerSubmit = async value => {
+    // =============================
+    // FILTRO BUSCADOR
+    // =============================
+    const filteredCustomers = useMemo(() => {
+        if (!search) return customersData;
+
+        const query = search.toLowerCase();
+
+        return customersData.filter(c =>
+            c.name?.toLowerCase().includes(query) ||
+            c.cedula?.toLowerCase().includes(query)
+        );
+    }, [customersData, search]);
+
+    // =============================
+    // GUARDAR CLIENTE
+    // =============================
+    const handlerSubmit = async values => {
         try {
-            const customerData = {
-                cedulaRuc: String(value.cedulaRuc || '').trim(),
-                name: value.name,
-                phone: String(value.phone || '').replace(/\D/g, ''),
-                address: value.address,
-                createdBy: userId,
-            };
-
             dispatch({ type: 'SHOW_LOADING' });
 
             if (editCustomer) {
                 await axios.put('/api/customers/update-customers', {
-                    ...customerData,
+                    ...values,
                     customerId: editCustomer._id,
                 });
-                message.success('¡Cliente actualizado correctamente!');
+                message.success('Cliente actualizado');
             } else {
-                const res = await axios.post('/api/customers/add-customers', customerData);
-
-                // ✅ Si ya existe, solo mostrar mensaje y no duplicar
-                if (res.data?.exists) {
-                    message.info(res.data?.message || 'Cliente ya existente');
-                } else {
-                    message.success(res.data?.message || 'Cliente creado correctamente');
-                }
+                await axios.post('/api/customers/add-customers', values);
+                message.success('Cliente guardado');
             }
 
-            await getAllCustomers();
+            dispatch({ type: 'HIDE_LOADING' });
+
             setPopModal(false);
             setEditCustomer(null);
             form.resetFields();
-
-            dispatch({ type: 'HIDE_LOADING' });
+            getAllCustomers();
         } catch (error) {
             dispatch({ type: 'HIDE_LOADING' });
-            message.error('Error al guardar el cliente');
             console.log(error);
+            message.error(error?.response?.data?.message || 'Error guardando cliente');
         }
     };
 
+    // =============================
+    // EDITAR
+    // =============================
     const handleEdit = record => {
         setEditCustomer(record);
-        form.setFieldsValue({
-            cedulaRuc: record.cedulaRuc,
-            name: record.name,
-            phone: record.phone,
-            address: record.address,
-        });
+        form.setFieldsValue(record);
         setPopModal(true);
     };
 
+    // =============================
+    // ELIMINAR
+    // =============================
     const handleDelete = async record => {
         try {
             dispatch({ type: 'SHOW_LOADING' });
-            await axios.post('/api/customers/delete-customers', { customerId: record._id });
-            message.success('¡Cliente eliminado correctamente!');
-            await getAllCustomers();
+
+            await axios.post('/api/customers/delete-customers', {
+                customerId: record._id,
+            });
+
             dispatch({ type: 'HIDE_LOADING' });
+            message.success('Cliente eliminado');
+            getAllCustomers();
         } catch (error) {
             dispatch({ type: 'HIDE_LOADING' });
-            message.error('Error al eliminar el cliente');
             console.log(error);
+            message.error('Error eliminando cliente');
         }
     };
 
-    const filteredCustomers = useMemo(() => {
-        const q = (searchName || '').trim().toLowerCase();
-        if (!q) return customersData;
-
-        return customersData.filter(c =>
-            String(c?.name || '').toLowerCase().includes(q)
-        );
-    }, [customersData, searchName]);
-
     const columns = [
         {
-            title: 'Cédula/RUC',
-            dataIndex: 'cedulaRuc',
+            title: 'Cédula / RUC',
+            dataIndex: 'cedula',
+            render: cedula => <b>{cedula || '-'}</b>,
         },
         {
             title: 'Nombre',
@@ -136,23 +125,23 @@ const Customers = () => {
         {
             title: 'Teléfono',
             dataIndex: 'phone',
-            render: phone => <span>+593 {phone}</span>,
         },
         {
             title: 'Dirección',
             dataIndex: 'address',
         },
         {
-            title: 'Creado el',
-            dataIndex: 'createdAt',
-            render: createdAt => new Date(createdAt).toLocaleDateString(),
-        },
-        {
-            title: 'Acciones',
+            title: 'Acción',
             render: (_, record) => (
                 <div>
-                    <EditOutlined className="cart-edit mx-2" onClick={() => handleEdit(record)} />
-                    <DeleteOutlined className="cart-action" onClick={() => handleDelete(record)} />
+                    <EditOutlined
+                        className="cart-edit mx-2"
+                        onClick={() => handleEdit(record)}
+                    />
+                    <DeleteOutlined
+                        className="cart-action"
+                        onClick={() => handleDelete(record)}
+                    />
                 </div>
             ),
         },
@@ -160,17 +149,16 @@ const Customers = () => {
 
     return (
         <Layout>
-            <div className="d-flex justify-content-between align-items-center mb-4">
+            <div className="d-flex justify-content-between mb-3">
                 <h2>Clientes</h2>
 
                 <div className="d-flex gap-3">
                     <Input
-                        placeholder="Buscar por nombre"
-                        value={searchName}
-                        onChange={e => setSearchName(e.target.value)}
-                        style={{ width: '220px' }}
+                        placeholder="Buscar por nombre o cédula"
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
                         suffix={<SearchOutlined />}
-                        maxLength={60}
+                        style={{ width: 250 }}
                     />
 
                     <Button
@@ -181,7 +169,7 @@ const Customers = () => {
                             setPopModal(true);
                         }}
                     >
-                        Agregar cliente
+                        Agregar Cliente
                     </Button>
                 </div>
             </div>
@@ -190,15 +178,11 @@ const Customers = () => {
                 dataSource={filteredCustomers}
                 columns={columns}
                 bordered
-                pagination={false}
                 rowKey="_id"
-                locale={{
-                    emptyText: searchName ? 'No se encontraron clientes coincidentes' : 'No hay clientes disponibles',
-                }}
             />
 
             <Modal
-                title={editCustomer ? 'Editar cliente' : 'Agregar nuevo cliente'}
+                title={editCustomer ? 'Editar Cliente' : 'Agregar Cliente'}
                 visible={popModal}
                 onCancel={() => {
                     setPopModal(false);
@@ -207,54 +191,38 @@ const Customers = () => {
                 }}
                 footer={false}
             >
-                <Form layout="vertical" onFinish={handlerSubmit} form={form}>
-                    <FormItem
-                        name="cedulaRuc"
-                        label="Cédula o RUC"
-                        rules={[{ required: true, message: 'Ingresa la cédula o RUC' }]}
+                <Form layout="vertical" form={form} onFinish={handlerSubmit}>
+                    <Form.Item
+                        name="cedula"
+                        label="Cédula / RUC"
+                        rules={[{ required: true, message: 'Ingresa cédula' }]}
                     >
-                        <Input
-                            maxLength={13}
-                            onChange={e => {
-                                const v = e.target.value.replace(/\s+/g, '');
-                                form.setFieldsValue({ cedulaRuc: v });
-                            }}
-                        />
-                    </FormItem>
+                        <Input />
+                    </Form.Item>
 
-                    <FormItem
+                    <Form.Item
                         name="name"
                         label="Nombre"
-                        rules={[{ required: true, message: 'Ingresa el nombre' }]}
+                        rules={[{ required: true, message: 'Ingresa nombre' }]}
                     >
                         <Input />
-                    </FormItem>
+                    </Form.Item>
 
-                    <FormItem
+                    <Form.Item
                         name="phone"
                         label="Teléfono"
-                        rules={[
-                            { required: true, message: 'Ingresa el teléfono' },
-                            { pattern: /^\d+$/, message: 'Ingresa solo números' },
-                        ]}
-                    >
-                        <Input
-                            prefix="+593"
-                            maxLength={15}
-                            onChange={e => {
-                                const value = e.target.value.replace(/\D/g, '');
-                                form.setFieldsValue({ phone: value });
-                            }}
-                        />
-                    </FormItem>
-
-                    <FormItem
-                        name="address"
-                        label="Dirección"
-                        rules={[{ required: true, message: 'Ingresa la dirección' }]}
+                        rules={[{ required: true, message: 'Ingresa teléfono' }]}
                     >
                         <Input />
-                    </FormItem>
+                    </Form.Item>
+
+                    <Form.Item
+                        name="address"
+                        label="Dirección"
+                        rules={[{ required: true, message: 'Ingresa dirección' }]}
+                    >
+                        <Input />
+                    </Form.Item>
 
                     <div className="form-btn-add">
                         <Button htmlType="submit" className="add-new">

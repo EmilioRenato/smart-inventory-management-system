@@ -5,30 +5,33 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch } from 'react-redux';
 import LayoutApp from '../../components/Layout';
 
-
 const Products = () => {
     const dispatch = useDispatch();
+    const [form] = Form.useForm();
 
-    // ✅ Hooks siempre arriba (no condicionales)
+    // ✅ sacar userId para createdBy
     const [userId, setUserId] = useState(null);
 
     const [productData, setProductData] = useState([]);
-    const [searchQuery, setSearchQuery] = useState('');
-
     const [popModal, setPopModal] = useState(false);
     const [editProduct, setEditProduct] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
+    // ✅ Modal stock por talla
     const [stockModal, setStockModal] = useState(false);
     const [stockProduct, setStockProduct] = useState(null);
 
-    const [form] = Form.useForm();
+    // ======== TALLAS =========
+    const shoeSizes = useMemo(() => Array.from({ length: 45 - 36 + 1 }, (_, i) => String(36 + i)), []);
+    const letterSizes = useMemo(() => ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'], []);
+    const footballNumericSizes = useMemo(() => Array.from({ length: 16 - 6 + 1 }, (_, i) => String(6 + i)), []);
 
-    // UI tallas
+    const categoryWatch = Form.useWatch('category', form);
+    const sizeWatch = Form.useWatch('size', form);
+    const sizeStockWatch = Form.useWatch('sizeStock', form);
+
     const [sizeStocksUI, setSizeStocksUI] = useState([]);
-    const [size, setSize] = useState(undefined);
-    const [sizeStock, setSizeStock] = useState('');
 
-    // ✅ leer userId
     useEffect(() => {
         const auth = localStorage.getItem('auth');
         if (auth) {
@@ -37,133 +40,191 @@ const Products = () => {
         }
     }, []);
 
-    // ===== opciones de tallas =====
-    const shoeSizes = useMemo(() => Array.from({ length: 45 - 36 + 1 }, (_, i) => String(36 + i)), []);
-    const letterSizes = useMemo(() => ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'], []);
-    const footballNumericSizes = useMemo(() => Array.from({ length: 16 - 6 + 1 }, (_, i) => String(6 + i)), []);
-
-    const categoryWatch = Form.useWatch('category', form);
-
     const availableSizes = useMemo(() => {
-        if (categoryWatch === 'burgers') return shoeSizes; // zapatos
-        if (categoryWatch === 'drinks') return letterSizes; // ropa
-        if (categoryWatch === 'pizzas') return [...footballNumericSizes, ...letterSizes]; // equipo fútbol (mixto)
+        if (categoryWatch === 'burgers') return shoeSizes; // Zapatos
+        if (categoryWatch === 'drinks') return letterSizes; // Ropa deportiva
+        if (categoryWatch === 'pizzas') return [...footballNumericSizes, ...letterSizes]; // Equipo fútbol
         return [];
     }, [categoryWatch, shoeSizes, letterSizes, footballNumericSizes]);
 
-    const calcTotalStock = list => (list || []).reduce((sum, x) => sum + Number(x?.stock || 0), 0);
+    const calcTotalStock = arr => (arr || []).reduce((sum, x) => sum + Number(x?.stock || 0), 0);
 
-    const normalizeSizeStocks = list =>
-        (Array.isArray(list) ? list : [])
-            .map(x => ({ size: String(x.size), stock: Number(x.stock || 0) }))
-            .filter(x => x.size);
+    const mergeSizeStocksSum = (currentList, newEntry) => {
+        // si ya existe la talla, SUMA (no reemplaza)
+        const idx = currentList.findIndex(x => String(x.size) === String(newEntry.size));
+        if (idx >= 0) {
+            const updated = [...currentList];
+            updated[idx] = {
+                size: String(newEntry.size),
+                stock: Number(updated[idx].stock || 0) + Number(newEntry.stock || 0),
+            };
+            return updated;
+        }
+        return [...currentList, { size: String(newEntry.size), stock: Number(newEntry.stock || 0) }];
+    };
 
-    // ✅ sumar stock si talla existe
-    const addOrSumSize = () => {
+    const addSizeToList = () => {
+        const size = String(sizeWatch || '').trim();
+        const st = Number(sizeStockWatch || 0);
+
         if (!categoryWatch) return message.error('Selecciona primero la categoría');
         if (!size) return message.error('Selecciona una talla');
-        if (!availableSizes.includes(String(size))) return message.error('Esa talla no es válida para esta categoría');
-
-        const st = Number(sizeStock);
+        if (!availableSizes.includes(size)) return message.error('Esa talla no es válida para esta categoría');
         if (!Number.isFinite(st) || st <= 0) return message.error('Ingresa un stock válido');
 
-        setSizeStocksUI(prev => {
-            const current = normalizeSizeStocks(prev);
-            const idx = current.findIndex(x => x.size === String(size));
-            if (idx >= 0) {
-                // ✅ SUMA, no reemplaza
-                const updated = [...current];
-                updated[idx] = { ...updated[idx], stock: updated[idx].stock + st };
-                return updated;
-            }
-            return [...current, { size: String(size), stock: st }];
-        });
-
-        setSize(undefined);
-        setSizeStock('');
+        setSizeStocksUI(prev => mergeSizeStocksSum(prev, { size, stock: st }));
+        form.setFieldsValue({ size: undefined, sizeStock: undefined });
     };
 
-    const removeSize = s => {
-        setSizeStocksUI(prev => normalizeSizeStocks(prev).filter(x => x.size !== String(s)));
+    const removeSizeFromList = size => {
+        setSizeStocksUI(prev => prev.filter(x => String(x.size) !== String(size)));
     };
 
-    // ===== GET products =====
-    const getAllProducts = async (search = '') => {
+    // =============================
+    // GET PRODUCTS (GLOBAL)
+    // =============================
+    const getAllProducts = async () => {
         try {
-            if (!userId) return;
-
             dispatch({ type: 'SHOW_LOADING' });
-
-            const { data } = await axios.get('/api/products/getproducts', {
-                params: { createdBy: userId, search },
-            });
-
+            const { data } = await axios.get('/api/products/getproducts');
             setProductData(Array.isArray(data) ? data : []);
-
             dispatch({ type: 'HIDE_LOADING' });
         } catch (error) {
             dispatch({ type: 'HIDE_LOADING' });
             console.log(error);
+            message.error('Error cargando productos');
         }
     };
 
     useEffect(() => {
-        if (!userId) return;
-        getAllProducts('');
+        getAllProducts();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [userId]);
+    }, []);
 
-    useEffect(() => {
-        if (!userId) return;
-        const timer = setTimeout(() => getAllProducts(searchQuery), 300);
-        return () => clearTimeout(timer);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchQuery, userId]);
+    // =============================
+    // FILTRO BUSCADOR
+    // =============================
+    const filteredProducts = useMemo(() => {
+        if (!searchQuery) return productData;
+        return productData.filter(product => String(product?.name || '').toLowerCase().includes(searchQuery.toLowerCase()));
+    }, [productData, searchQuery]);
 
-    // ===== delete =====
-    const handlerDelete = async record => {
+    // =============================
+    // EDITAR
+    // =============================
+    const handleEdit = record => {
+        setEditProduct(record);
+
+        form.setFieldsValue({
+            name: record?.name,
+            price: record?.price,
+            category: record?.category,
+            image: record?.image,
+            size: undefined,
+            sizeStock: undefined,
+        });
+
+        setSizeStocksUI(Array.isArray(record?.sizeStocks) ? record.sizeStocks : []);
+        setPopModal(true);
+    };
+
+    // =============================
+    // ELIMINAR
+    // =============================
+    const handleDelete = async record => {
         try {
             dispatch({ type: 'SHOW_LOADING' });
             await axios.post('/api/products/deleteproducts', { productId: record._id });
-            message.success('Producto eliminado correctamente');
             dispatch({ type: 'HIDE_LOADING' });
-            getAllProducts(searchQuery);
+            message.success('Producto eliminado');
+            getAllProducts();
         } catch (error) {
             dispatch({ type: 'HIDE_LOADING' });
-            message.error('Error al eliminar');
             console.log(error);
+            message.error('Error eliminando producto');
         }
     };
 
-    // ===== stock modal =====
+    const categoryLabel = c => {
+        if (c === 'pizzas') return 'Equipo de fútbol';
+        if (c === 'burgers') return 'Zapatos';
+        if (c === 'drinks') return 'Ropa deportiva';
+        return c;
+    };
+
+    // ✅ abrir modal stock por talla
     const openStockModal = record => {
         setStockProduct(record);
         setStockModal(true);
     };
 
-    // ===== submit add/edit =====
+    const columns = [
+        { title: 'Nombre', dataIndex: 'name' },
+        {
+            title: 'Imagen',
+            dataIndex: 'image',
+            render: (image, record) => <img src={image} alt={record.name} height={60} width={60} />,
+        },
+        {
+            title: 'Precio',
+            dataIndex: 'price',
+            render: price => <b>${price}</b>,
+        },
+        {
+            title: 'Stock',
+            dataIndex: 'stock',
+            render: (stock, record) => (
+                <Button type="link" style={{ padding: 0, height: 'auto' }} onClick={() => openStockModal(record)}>
+                    {Number(stock) < 10 ? <span style={{ color: 'red' }}>{stock}</span> : <span style={{ color: 'green' }}>{stock}</span>}
+                </Button>
+            ),
+        },
+        {
+            title: 'Categoría',
+            dataIndex: 'category',
+            render: c => categoryLabel(c),
+        },
+        {
+            title: 'Acción',
+            render: (_, record) => (
+                <div>
+                    <EditOutlined className="cart-edit mx-2" onClick={() => handleEdit(record)} />
+                    <DeleteOutlined className="cart-action" onClick={() => handleDelete(record)} />
+                </div>
+            ),
+        },
+    ];
+
+    // =============================
+    // GUARDAR PRODUCTO
+    // =============================
     const handlerSubmit = async values => {
         try {
-            if (!userId) return message.error('Usuario no autenticado');
-            const cleanName = String(values.name || '').trim();
-            if (!cleanName) return message.error('Ingresa el nombre');
+            if (!userId) return message.error('No se detectó usuario logueado. Cierra sesión e ingresa de nuevo.');
 
-            const finalSizes = normalizeSizeStocks(sizeStocksUI);
-            if (!finalSizes.length) return message.error('Agrega al menos una talla');
+            const cleanName = String(values?.name || '').trim();
+            const cleanImage = String(values?.image || '').trim();
+
+            if (!cleanName) return message.error('Falta el nombre');
+            if (!values?.category) return message.error('Falta la categoría');
+            if (values?.price === undefined || values?.price === null || values?.price === '') return message.error('Falta el precio');
+            if (!cleanImage) return message.error('Falta la URL de imagen');
+
+            if (!sizeStocksUI.length) return message.error('Agrega al menos una talla con stock');
 
             const payload = {
                 name: cleanName,
                 category: values.category,
                 price: Number(values.price),
-                image: values.image,
-                createdBy: userId,
-                sizeStocks: finalSizes,
-                stock: calcTotalStock(finalSizes),
+                image: cleanImage,
+                sizeStocks: sizeStocksUI,
+                stock: calcTotalStock(sizeStocksUI),
+                createdBy: userId, // ✅ obligatorio
             };
 
             dispatch({ type: 'SHOW_LOADING' });
 
-            if (editProduct?._id) {
+            if (editProduct) {
                 await axios.put('/api/products/updateproducts', {
                     ...payload,
                     productId: editProduct._id,
@@ -171,7 +232,7 @@ const Products = () => {
                 message.success('Producto actualizado');
             } else {
                 await axios.post('/api/products/addproducts', payload);
-                message.success('Producto creado');
+                message.success('Producto agregado');
             }
 
             dispatch({ type: 'HIDE_LOADING' });
@@ -180,81 +241,13 @@ const Products = () => {
             setEditProduct(null);
             form.resetFields();
             setSizeStocksUI([]);
-            setSize(undefined);
-            setSizeStock('');
-
-            getAllProducts(searchQuery);
+            getAllProducts();
         } catch (error) {
             dispatch({ type: 'HIDE_LOADING' });
-            message.error(error?.response?.data?.message || 'Error');
             console.log(error);
+            message.error(error?.response?.data?.message || 'Error guardando producto');
         }
     };
-
-    // ===== table columns =====
-    const columns = [
-        { title: 'Nombre', dataIndex: 'name' },
-        {
-            title: 'Imagen',
-            dataIndex: 'image',
-            render: (image, record) => (
-                <img
-                    src={image}
-                    alt={record.name}
-                    height={60}
-                    width={60}
-                    style={{ objectFit: 'cover' }}
-                    onError={e => {
-                        e.currentTarget.src = 'https://via.placeholder.com/60?text=IMG';
-                    }}
-                />
-            ),
-        },
-        {
-            title: 'Precio',
-            dataIndex: 'price',
-            render: price => <span>${price}</span>,
-        },
-        {
-            title: 'Stock',
-            dataIndex: 'stock',
-            render: (stock, record) => (
-                <Button type="link" style={{ padding: 0 }} onClick={() => openStockModal(record)}>
-                    {Number(stock) < 10 ? (
-                        <span style={{ color: 'red' }}>{stock}</span>
-                    ) : (
-                        <span style={{ color: 'green' }}>{stock}</span>
-                    )}
-                </Button>
-            ),
-        },
-        {
-            title: 'Acciones',
-            render: (_, record) => (
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                    <EditOutlined
-                        className="cart-edit"
-                        onClick={() => {
-                            setEditProduct(record);
-                            setPopModal(true);
-
-                            form.setFieldsValue({
-                                name: record.name,
-                                category: record.category,
-                                price: record.price,
-                                image: record.image,
-                            });
-
-                            setSizeStocksUI(normalizeSizeStocks(record.sizeStocks));
-                            setSize(undefined);
-                            setSizeStock('');
-                        }}
-                    />
-                    <DeleteOutlined className="cart-action" onClick={() => handlerDelete(record)} />
-                </div>
-            ),
-        },
-    ];
 
     const stockColumns = [
         { title: 'Talla', dataIndex: 'size' },
@@ -268,22 +261,20 @@ const Products = () => {
 
                 <div className="d-flex gap-3">
                     <Input
-                        placeholder="Buscar por nombre del producto"
+                        placeholder="Buscar producto"
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
-                        style={{ width: 240 }}
                         suffix={<SearchOutlined />}
+                        style={{ width: 250 }}
                     />
 
                     <Button
                         className="add-new"
                         onClick={() => {
                             setEditProduct(null);
-                            setPopModal(true);
                             form.resetFields();
                             setSizeStocksUI([]);
-                            setSize(undefined);
-                            setSizeStock('');
+                            setPopModal(true);
                         }}
                     >
                         Agregar producto
@@ -291,18 +282,9 @@ const Products = () => {
                 </div>
             </div>
 
-            <Table
-                dataSource={productData}
-                columns={columns}
-                bordered
-                pagination={false}
-                rowKey="_id"
-                locale={{
-                    emptyText: searchQuery ? 'No se encontraron productos' : 'No hay productos',
-                }}
-            />
+            <Table dataSource={filteredProducts} columns={columns} bordered rowKey="_id" />
 
-            {/* Modal stock por talla */}
+            {/* ✅ Modal: Stock por talla */}
             {stockModal && (
                 <Modal
                     title={`Stock por talla${stockProduct?.name ? `: ${stockProduct.name}` : ''}`}
@@ -317,14 +299,14 @@ const Products = () => {
                     {Array.isArray(stockProduct?.sizeStocks) && stockProduct.sizeStocks.length ? (
                         <>
                             <Table
-                                dataSource={normalizeSizeStocks(stockProduct.sizeStocks)}
+                                dataSource={stockProduct.sizeStocks}
                                 columns={stockColumns}
                                 pagination={false}
-                                bordered
                                 rowKey={(r, i) => `${r.size}-${i}`}
+                                bordered
                             />
                             <div style={{ marginTop: 12, textAlign: 'right' }}>
-                                <b>Total:</b> {stockProduct?.stock ?? 0}
+                                <b>Total:</b> {stockProduct.stock}
                             </div>
                         </>
                     ) : (
@@ -333,132 +315,104 @@ const Products = () => {
                 </Modal>
             )}
 
-            {/* Modal agregar/editar */}
-            {popModal && (
-                <Modal
-                    title={editProduct ? 'Editar producto' : 'Agregar producto'}
-                    visible={popModal}
-                    onCancel={() => {
-                        setPopModal(false);
-                        setEditProduct(null);
-                        form.resetFields();
-                        setSizeStocksUI([]);
-                        setSize(undefined);
-                        setSizeStock('');
-                    }}
-                    footer={false}
-                >
-                    <Form layout="vertical" onFinish={handlerSubmit} form={form}>
-                        <Form.Item
-                            name="name"
-                            label="Nombre"
-                            rules={[{ required: true, message: 'Ingresa el nombre' }]}
+            <Modal
+                title={editProduct ? 'Editar producto' : 'Agregar producto'}
+                visible={popModal}
+                onCancel={() => {
+                    setPopModal(false);
+                    setEditProduct(null);
+                    form.resetFields();
+                    setSizeStocksUI([]);
+                }}
+                footer={false}
+            >
+                <Form layout="vertical" form={form} onFinish={handlerSubmit}>
+                    <Form.Item name="name" label="Nombre" rules={[{ required: true, message: 'Ingresa nombre' }]}>
+                        <Input placeholder="Ej: Chaqueta deportiva" />
+                    </Form.Item>
+
+                    <Form.Item name="category" label="Categoría" rules={[{ required: true, message: 'Selecciona categoría' }]}>
+                        <Select
+                            placeholder="Selecciona..."
+                            onChange={() => {
+                                setSizeStocksUI([]);
+                                form.setFieldsValue({ size: undefined, sizeStock: undefined });
+                            }}
                         >
-                            <Input placeholder="Ej: Chaquetas deportivas" />
-                        </Form.Item>
+                            <Select.Option value="pizzas">Equipo de fútbol</Select.Option>
+                            <Select.Option value="burgers">Zapatos</Select.Option>
+                            <Select.Option value="drinks">Ropa deportiva</Select.Option>
+                        </Select>
+                    </Form.Item>
 
-                        <Form.Item
-                            name="category"
-                            label="Categoría"
-                            rules={[{ required: true, message: 'Selecciona una categoría' }]}
-                        >
-                            <Select
-                                onChange={() => {
-                                    setSizeStocksUI([]);
-                                    setSize(undefined);
-                                    setSizeStock('');
-                                }}
-                            >
-                                <Select.Option value="pizzas">Equipo de fútbol</Select.Option>
-                                <Select.Option value="burgers">Zapatos</Select.Option>
-                                <Select.Option value="drinks">Ropa deportiva</Select.Option>
-                            </Select>
-                        </Form.Item>
+                    {categoryWatch ? (
+                        <>
+                            <Form.Item name="size" label="Talla">
+                                <Select placeholder="Selecciona una talla">
+                                    {availableSizes.map(s => (
+                                        <Select.Option key={s} value={s}>
+                                            {s}
+                                        </Select.Option>
+                                    ))}
+                                </Select>
+                            </Form.Item>
 
-                        {categoryWatch ? (
-                            <>
-                                <Form.Item label="Talla">
-                                    <Select
-                                        value={size}
-                                        onChange={v => setSize(v)}
-                                        placeholder="Selecciona una talla"
-                                    >
-                                        {availableSizes.map(s => (
-                                            <Select.Option key={s} value={s}>
-                                                {s}
-                                            </Select.Option>
-                                        ))}
-                                    </Select>
-                                </Form.Item>
+                            <Form.Item name="sizeStock" label="Stock de esta talla">
+                                <Input type="number" placeholder="Ej: 10" />
+                            </Form.Item>
 
-                                <Form.Item label="Stock a agregar (se suma)">
-                                    <Input
-                                        value={sizeStock}
-                                        onChange={e => setSizeStock(e.target.value)}
-                                        placeholder="Ej: 10"
-                                    />
-                                </Form.Item>
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
+                                <Button type="primary" onClick={addSizeToList}>
+                                    Agregar talla
+                                </Button>
 
-                                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                                    <Button type="primary" onClick={addOrSumSize}>
-                                        Agregar stock a talla
-                                    </Button>
-                                    <div style={{ marginLeft: 'auto' }}>
-                                        <b>Total:</b> {calcTotalStock(sizeStocksUI)}
-                                    </div>
+                                <div style={{ marginLeft: 'auto' }}>
+                                    <b>Total:</b> {calcTotalStock(sizeStocksUI)}
                                 </div>
+                            </div>
 
-                                {sizeStocksUI.length ? (
-                                    <Table
-                                        dataSource={normalizeSizeStocks(sizeStocksUI)}
-                                        pagination={false}
-                                        bordered
-                                        rowKey={(r, i) => `${r.size}-${i}`}
-                                        columns={[
-                                            { title: 'Talla', dataIndex: 'size' },
-                                            { title: 'Stock', dataIndex: 'stock' },
-                                            {
-                                                title: 'Quitar',
-                                                render: (_, r) => (
-                                                    <Button danger onClick={() => removeSize(r.size)}>
-                                                        Quitar
-                                                    </Button>
-                                                ),
-                                            },
-                                        ]}
-                                    />
-                                ) : (
-                                    <Empty description="Aún no agregas tallas" />
-                                )}
-                            </>
-                        ) : (
-                            <Empty description="Selecciona una categoría para habilitar tallas" />
-                        )}
+                            {sizeStocksUI.length ? (
+                                <Table
+                                    dataSource={sizeStocksUI}
+                                    pagination={false}
+                                    bordered
+                                    rowKey={(r, i) => `${r.size}-${i}`}
+                                    columns={[
+                                        { title: 'Talla', dataIndex: 'size' },
+                                        { title: 'Stock', dataIndex: 'stock' },
+                                        {
+                                            title: 'Quitar',
+                                            render: (_, r) => (
+                                                <Button danger onClick={() => removeSizeFromList(r.size)}>
+                                                    Quitar
+                                                </Button>
+                                            ),
+                                        },
+                                    ]}
+                                />
+                            ) : (
+                                <Empty description="Aún no agregas tallas" />
+                            )}
+                        </>
+                    ) : (
+                        <Empty description="Selecciona una categoría para habilitar tallas" />
+                    )}
 
-                        <Form.Item
-                            name="price"
-                            label="Precio"
-                            rules={[{ required: true, message: 'Ingresa el precio' }]}
-                        >
-                            <Input placeholder="Ej: 20" />
-                        </Form.Item>
+                    <Form.Item name="price" label="Precio" rules={[{ required: true, message: 'Ingresa precio' }]}>
+                        <Input type="number" />
+                    </Form.Item>
 
-                        <Form.Item
-                            name="image"
-                            label="URL de imagen"
-                            rules={[{ required: true, message: 'Ingresa la URL de imagen' }]}
-                        >
-                            <Input placeholder="https://..." />
-                        </Form.Item>
+                    <Form.Item name="image" label="URL de imagen" rules={[{ required: true, message: 'Ingresa URL de imagen' }]}>
+                        <Input placeholder="https://..." />
+                    </Form.Item>
 
-                        <div className="form-btn-add">
-                            <Button htmlType="submit" className="add-new">
-                                {editProduct ? 'Guardar' : 'Agregar'}
-                            </Button>
-                        </div>
-                    </Form>
-                </Modal>
-            )}
+                    <div className="form-btn-add">
+                        <Button htmlType="submit" className="add-new">
+                            {editProduct ? 'Actualizar' : 'Guardar'}
+                        </Button>
+                    </div>
+                </Form>
+            </Modal>
         </LayoutApp>
     );
 };

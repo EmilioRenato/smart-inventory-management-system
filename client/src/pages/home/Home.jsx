@@ -14,28 +14,16 @@ import allCategories from '../../asset/images/all-cat.png';
 const Home = () => {
     const dispatch = useDispatch();
 
-    const [userId, setUserId] = useState(null);
     const [productData, setProductData] = useState([]);
     const [selectedCategory, setSelectedCategory] = useState('all');
 
+    // 🔥 Ahora GLOBAL (sin createdBy)
     useEffect(() => {
-        const auth = localStorage.getItem('auth');
-        if (auth) {
-            const parsed = JSON.parse(auth);
-            setUserId(parsed?._id || null);
-        }
-    }, []);
-
-    useEffect(() => {
-        if (!userId) return;
-
         const getAllProducts = async () => {
             try {
                 dispatch({ type: 'SHOW_LOADING' });
 
-                const { data } = await axios.get(
-                    `/api/products/getproducts?createdBy=${userId}`
-                );
+                const { data } = await axios.get('/api/products/getproducts');
 
                 setProductData(Array.isArray(data) ? data : []);
 
@@ -47,24 +35,31 @@ const Home = () => {
         };
 
         getAllProducts();
-    }, [dispatch, userId]);
+    }, [dispatch]);
 
     const categories = [
         { name: 'all', label: 'Todos', imageUrl: allCategories },
-        { name: 'pizzas', label: 'Equipo de fútbol', imageUrl: futbolImg },
-        { name: 'burgers', label: 'Zapatos', imageUrl: zapatosImg },
-        { name: 'drinks', label: 'Ropa deportiva', imageUrl: ropaImg },
+        { name: 'futbol', label: 'Equipo de fútbol', imageUrl: futbolImg },
+        { name: 'zapatos', label: 'Zapatos', imageUrl: zapatosImg },
+        { name: 'ropa', label: 'Ropa deportiva', imageUrl: ropaImg },
     ];
+
+    const filteredProducts =
+        selectedCategory === 'all'
+            ? productData
+            : productData.filter(
+                  product => product.category === selectedCategory
+              );
 
     return (
         <LayoutApp>
-            <div>
-                <h2>Punto de venta</h2>
-            </div>
+            <h2>Punto de venta</h2>
 
             {productData.length === 0 ? (
                 <div className="no-product">
-                    <h3 className="no-product-text">No se encontraron productos</h3>
+                    <h3 className="no-product-text">
+                        No se encontraron productos
+                    </h3>
                     <Empty />
                 </div>
             ) : (
@@ -78,9 +73,13 @@ const Home = () => {
                                         ? 'category-active'
                                         : ''
                                 }`}
-                                onClick={() => setSelectedCategory(category.name)}
+                                onClick={() =>
+                                    setSelectedCategory(category.name)
+                                }
                             >
-                                <h3 className="categoryName">{category.label}</h3>
+                                <h3 className="categoryName">
+                                    {category.label}
+                                </h3>
                                 <img
                                     src={category.imageUrl}
                                     alt={category.label}
@@ -92,12 +91,7 @@ const Home = () => {
                     </div>
 
                     <Row>
-                        {(selectedCategory === 'all'
-                            ? productData
-                            : productData.filter(
-                                  i => i.category === selectedCategory
-                              )
-                        ).map(product => (
+                        {filteredProducts.map(product => (
                             <Col
                                 xs={24}
                                 sm={6}

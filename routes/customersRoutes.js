@@ -1,22 +1,19 @@
 import express from 'express';
 import {
-    addCustomerController,
-    deleteCustomerController,
-    getCustomerController,
-    getCustomersByNumberController,
-    updateCustomerController,
-    getCustomerByCedulaController,
+  addCustomerController,
+  deleteCustomerController,
+  getCustomerController,
+  updateCustomerController,
+  getCustomerByCedulaController,
 } from '../controllers/customerController.js';
 
 const customerRouter = express.Router();
 
+// Por tienda
 customerRouter.get('/get-customers', getCustomerController);
 
-// ✅ NUEVO: autocompletar por cédula
+// Autocompletar por cédula/RUC
 customerRouter.get('/get-customer-by-cedula', getCustomerByCedulaController);
-
-// (lo dejamos por si lo sigues usando)
-customerRouter.get('/get-customers-by-number', getCustomersByNumberController);
 
 customerRouter.post('/add-customers', addCustomerController);
 customerRouter.put('/update-customers', updateCustomerController);

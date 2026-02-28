@@ -9,7 +9,6 @@ import Layout from '../../components/Layout';
 const Bills = () => {
     const componentRef = useRef();
     const dispatch = useDispatch();
-
     const [billsData, setBillsData] = useState([]);
     const [popModal, setPopModal] = useState(false);
     const [selectedBill, setSelectedBill] = useState(null);
@@ -18,10 +17,9 @@ const Bills = () => {
         try {
             dispatch({ type: 'SHOW_LOADING' });
 
-            // ✅ SIN createdBy -> muestra todas las facturas
             const { data } = await axios.get('/api/bills/getbills');
 
-            const sortedData = (Array.isArray(data) ? data : []).sort(
+            const sortedData = (data || []).sort(
                 (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
             );
 
@@ -36,7 +34,6 @@ const Bills = () => {
 
     useEffect(() => {
         getAllBills();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const invoiceNo = useMemo(() => {
@@ -48,38 +45,20 @@ const Bills = () => {
 
     const columns = [
         {
-            title: 'N.º Factura',
-            render: (_, record, index) => String(index + 1).padStart(3, '0'),
+            title: 'N.º',
+            render: (_, __, index) => String(index + 1).padStart(3, '0'),
         },
-        {
-            title: 'Nombre del cliente',
-            dataIndex: 'customerName',
-        },
-        {
-            title: 'Teléfono',
-            dataIndex: 'customerPhone',
-        },
-        {
-            title: 'Dirección',
-            dataIndex: 'customerAddress',
-        },
-        {
-            title: 'Subtotal',
-            dataIndex: 'subTotal',
-        },
-        {
-            title: 'Impuesto',
-            dataIndex: 'tax',
-        },
+        { title: 'Cliente', dataIndex: 'customerName' },
+        { title: 'Cédula', dataIndex: 'customerCedula' },
         {
             title: 'Total',
-            dataIndex: 'totalAmount',
+            dataIndex: 'paidTotal',
+            render: v => <b>${Number(v || 0).toFixed(2)}</b>,
         },
         {
             title: 'Acción',
             render: (_, record) => (
                 <EyeOutlined
-                    className="cart-edit eye"
                     onClick={() => {
                         setSelectedBill(record);
                         setPopModal(true);
@@ -95,112 +74,50 @@ const Bills = () => {
 
     return (
         <Layout>
-            <h2>Todas las facturas</h2>
+            <h2>Notas de venta</h2>
 
-            <Table dataSource={billsData} columns={columns} bordered rowKey="_id" />
+            <Table
+                dataSource={billsData}
+                columns={columns}
+                bordered
+                rowKey="_id"
+            />
 
             {popModal && selectedBill && (
                 <Modal
-                    title="Detalles de la factura"
-                    width={400}
+                    title="Detalle de la nota"
+                    width={420}
                     visible={popModal}
                     onCancel={() => setPopModal(false)}
                     footer={false}
                 >
-                    <div className="card" ref={componentRef}>
-                        <div className="cardHeader">
-                            <h3 className="logo">Factura N.º {invoiceNo}</h3>
-                            <span>
-                                Teléfono: <b>+59362562513</b>
-                            </span>
-                            <span>
-                                Dirección: <b>Quito, Ecuador</b>
-                            </span>
-                        </div>
+                    <div ref={componentRef}>
+                        <h3>Nota N.º {invoiceNo}</h3>
 
-                        <div className="cardBody">
-                            <div className="group">
-                                <span>Nombre del cliente:</span>
-                                <span>
-                                    <b>{selectedBill.customerName}</b>
-                                </span>
-                            </div>
-                            <div className="group">
-                                <span>Teléfono del cliente:</span>
-                                <span>
-                                    <b>{selectedBill.customerPhone}</b>
-                                </span>
-                            </div>
-                            <div className="group">
-                                <span>Dirección del cliente:</span>
-                                <span>
-                                    <b>{selectedBill.customerAddress}</b>
-                                </span>
-                            </div>
-                            <div className="group">
-                                <span>Fecha:</span>
-                                <span>
-                                    <b>{new Date(selectedBill.createdAt).toLocaleDateString()}</b>
-                                </span>
-                            </div>
-                            <div className="group">
-                                <span>Total a pagar:</span>
-                                <span>
-                                    <b>${selectedBill.totalAmount}</b>
-                                </span>
-                            </div>
-                        </div>
+                        <p><b>Cliente:</b> {selectedBill.customerName}</p>
+                        <p><b>Cédula:</b> {selectedBill.customerCedula}</p>
+                        <p><b>Teléfono:</b> {selectedBill.customerPhone}</p>
+                        <p><b>Dirección:</b> {selectedBill.customerAddress}</p>
 
-                        <div className="cardFooter">
-                            <h4>Detalle de la compra</h4>
+                        <hr />
 
-                            {(selectedBill.cartItems || []).map((product, index) => (
-                                <div className="footerCard" key={index}>
-                                    <div className="group">
-                                        <span>Producto:</span>
-                                        <span>
-                                            <b>{product.name}</b>
-                                        </span>
-                                    </div>
-                                    <div className="group">
-                                        <span>Cantidad:</span>
-                                        <span>
-                                            <b>{product.quantity}</b>
-                                        </span>
-                                    </div>
-                                    <div className="group">
-                                        <span>Precio:</span>
-                                        <span>
-                                            <b>${product.price}</b>
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
+                        <p><b>Precio sugerido:</b> ${Number(selectedBill.suggestedTotal || 0).toFixed(2)}</p>
+                        <p><b>Descuento:</b> ${Number(selectedBill.discountAmount || 0).toFixed(2)}</p>
+                        <p><b>Total a pagar:</b> ${Number(selectedBill.paidTotal || 0).toFixed(2)}</p>
 
-                            <div className="footerCardTotal">
-                                <div className="group">
-                                    <h3>Total:</h3>
-                                    <h3>
-                                        <b>${selectedBill.totalAmount}</b>
-                                    </h3>
-                                </div>
-                            </div>
+                        <hr />
 
-<div className="footerThanks">
-    <span>
-        <b>Atendido por:</b> {selectedBill?.advisorName || '---'}
-    </span>
-    <br />
-    <span>Gracias por su compra</span>
-</div>
-                        </div>
+                        <p>
+                            <b>Atendido por:</b> {selectedBill.sellerName}
+                            {' '}({selectedBill.sellerCode})
+                        </p>
+
+                        <p>Gracias por su compra</p>
                     </div>
 
-                    <div className="bills-btn-add">
-                        <Button onClick={handlePrint} className="add-new">
-                            Imprimir factura
-                        </Button>
-                    </div>
+                    <Button onClick={handlePrint} className="add-new">
+                        Imprimir
+                    </Button>
                 </Modal>
             )}
         </Layout>
