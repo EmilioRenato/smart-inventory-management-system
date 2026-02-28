@@ -1,32 +1,28 @@
 import Bills from '../models/billsModel.js';
 
-//for add or fetch
+// GET bills (ahora muestra todas; si viene createdBy lo usa como filtro opcional)
 export const getBillsController = async (req, res) => {
     try {
         const { createdBy } = req.query;
-        if (!createdBy) {
-            return res.status(400).json({ message: 'createdBy is required' });
-        }
 
-        const bills = await Bills.find({ createdBy });
-        res.send(bills);
+        const query = createdBy ? { createdBy } : {};
+        const bills = await Bills.find(query).sort({ createdAt: -1 });
+
+        res.status(200).send(bills);
     } catch (error) {
         console.log(error);
         res.status(500).json({ message: 'Error fetching bills' });
     }
 };
 
-//for add
+// ADD bill (createdBy ya no es obligatorio; si llega se guarda)
 export const addBillsController = async (req, res) => {
     try {
-        const { createdBy } = req.body;
-        if (!createdBy) {
-            return res.status(400).json({ message: 'createdBy is required' });
-        }
-
         const newBills = new Bills(req.body);
         await newBills.save();
-        res.send('Bill Created Successfully!');
+
+        // devuelvo el documento creado (mejor para el frontend)
+        res.status(200).send(newBills);
     } catch (error) {
         console.log(error);
         res.status(500).json({ message: 'Error creating bill' });

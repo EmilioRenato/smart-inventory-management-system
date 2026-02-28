@@ -2,7 +2,7 @@ import { DeleteOutlined, EditOutlined, SearchOutlined } from '@ant-design/icons'
 import { Button, Form, Input, Modal, Table, message } from 'antd';
 import FormItem from 'antd/lib/form/FormItem';
 import axios from 'axios';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch } from 'react-redux';
 import Layout from '../../components/Layout';
 
@@ -11,167 +11,144 @@ const Customers = () => {
         const auth = localStorage.getItem('auth');
         return auth ? JSON.parse(auth)._id : null;
     });
+
     const dispatch = useDispatch();
     const [customersData, setCustomersData] = useState([]);
     const [popModal, setPopModal] = useState(false);
     const [editCustomer, setEditCustomer] = useState(null);
-    const [searchPhone, setSearchPhone] = useState('');
-    const [searchResults, setSearchResults] = useState([]);
+
+    // Buscar por nombre (frontend)
+    const [searchName, setSearchName] = useState('');
+
     const [form] = Form.useForm();
 
     useEffect(() => {
         const auth = localStorage.getItem('auth');
-        if (auth) {
-            setUserId(JSON.parse(auth)._id);
-        }
+        if (auth) setUserId(JSON.parse(auth)._id);
     }, []);
 
     const getAllCustomers = async () => {
         try {
-            dispatch({
-                type: 'SHOW_LOADING',
+            dispatch({ type: 'SHOW_LOADING' });
+
+            const { data } = await axios.get('/api/customers/get-customers', {
+                params: { createdBy: userId },
             });
-            const { data } = await axios.get('/api/customers/get-customers');
+
             setCustomersData(data);
-            dispatch({
-                type: 'HIDE_LOADING',
-            });
+            dispatch({ type: 'HIDE_LOADING' });
         } catch (error) {
-            dispatch({
-                type: 'HIDE_LOADING',
-            });
+            dispatch({ type: 'HIDE_LOADING' });
             console.log(error);
         }
     };
 
     useEffect(() => {
-        getAllCustomers();
-    }, []);
+        if (userId) getAllCustomers();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userId]);
 
     const handlerSubmit = async value => {
         try {
             const customerData = {
+                cedulaRuc: String(value.cedulaRuc || '').trim(),
                 name: value.name,
-                phone: value.phone,
+                phone: String(value.phone || '').replace(/\D/g, ''),
                 address: value.address,
                 createdBy: userId,
             };
 
-            dispatch({
-                type: 'SHOW_LOADING',
-            });
+            dispatch({ type: 'SHOW_LOADING' });
 
             if (editCustomer) {
                 await axios.put('/api/customers/update-customers', {
                     ...customerData,
                     customerId: editCustomer._id,
                 });
-                message.success('Customer Updated Successfully!');
+                message.success('¡Cliente actualizado correctamente!');
             } else {
-                await axios.post('/api/customers/add-customers', customerData);
-                message.success('Customer Added Successfully!');
+                const res = await axios.post('/api/customers/add-customers', customerData);
+
+                // ✅ Si ya existe, solo mostrar mensaje y no duplicar
+                if (res.data?.exists) {
+                    message.info(res.data?.message || 'Cliente ya existente');
+                } else {
+                    message.success(res.data?.message || 'Cliente creado correctamente');
+                }
             }
 
-            getAllCustomers();
+            await getAllCustomers();
             setPopModal(false);
             setEditCustomer(null);
             form.resetFields();
-            dispatch({
-                type: 'HIDE_LOADING',
-            });
+
+            dispatch({ type: 'HIDE_LOADING' });
         } catch (error) {
-            dispatch({
-                type: 'HIDE_LOADING',
-            });
-            message.error(editCustomer ? 'Error updating customer' : 'Error adding customer');
+            dispatch({ type: 'HIDE_LOADING' });
+            message.error('Error al guardar el cliente');
             console.log(error);
         }
     };
 
     const handleEdit = record => {
         setEditCustomer(record);
-        form.setFieldsValue(record);
+        form.setFieldsValue({
+            cedulaRuc: record.cedulaRuc,
+            name: record.name,
+            phone: record.phone,
+            address: record.address,
+        });
         setPopModal(true);
     };
 
     const handleDelete = async record => {
         try {
-            dispatch({
-                type: 'SHOW_LOADING',
-            });
+            dispatch({ type: 'SHOW_LOADING' });
             await axios.post('/api/customers/delete-customers', { customerId: record._id });
-            message.success('Customer Deleted Successfully!');
-            getAllCustomers();
-            dispatch({
-                type: 'HIDE_LOADING',
-            });
+            message.success('¡Cliente eliminado correctamente!');
+            await getAllCustomers();
+            dispatch({ type: 'HIDE_LOADING' });
         } catch (error) {
-            dispatch({
-                type: 'HIDE_LOADING',
-            });
-            message.error('Error deleting customer');
+            dispatch({ type: 'HIDE_LOADING' });
+            message.error('Error al eliminar el cliente');
             console.log(error);
         }
     };
 
-    const handleSearch = async () => {
-        const cleanPhone = searchPhone.replace(/\D/g, '');
+    const filteredCustomers = useMemo(() => {
+        const q = (searchName || '').trim().toLowerCase();
+        if (!q) return customersData;
 
-        try {
-            dispatch({ type: 'SHOW_LOADING' });
-            const response = await axios.get('/api/customers/get-customers-by-number', {
-                params: {
-                    phone: cleanPhone,
-                    createdBy: userId,
-                },
-            });
-
-            setSearchResults(response.data);
-
-            dispatch({ type: 'HIDE_LOADING' });
-        } catch (error) {
-            console.error('Search error:', error);
-            message.error('Error searching customers');
-            dispatch({ type: 'HIDE_LOADING' });
-        }
-    };
-
-    // Debounce search with shorter delay for better responsiveness
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            handleSearch();
-        }, 300);
-
-        return () => clearTimeout(timer);
-    }, [searchPhone]);
-
-    // Handle phone input with partial search support
-    const handlePhoneInput = e => {
-        const value = e.target.value.replace(/\D/g, '');
-        setSearchPhone(value);
-    };
+        return customersData.filter(c =>
+            String(c?.name || '').toLowerCase().includes(q)
+        );
+    }, [customersData, searchName]);
 
     const columns = [
         {
-            title: 'Customer Name',
+            title: 'Cédula/RUC',
+            dataIndex: 'cedulaRuc',
+        },
+        {
+            title: 'Nombre',
             dataIndex: 'name',
         },
         {
-            title: 'Contact Number',
+            title: 'Teléfono',
             dataIndex: 'phone',
-            render: phone => <span>+880 {phone}</span>,
+            render: phone => <span>+593 {phone}</span>,
         },
         {
-            title: 'Customer Address',
+            title: 'Dirección',
             dataIndex: 'address',
         },
         {
-            title: 'Created On',
+            title: 'Creado el',
             dataIndex: 'createdAt',
             render: createdAt => new Date(createdAt).toLocaleDateString(),
         },
         {
-            title: 'Actions',
+            title: 'Acciones',
             render: (_, record) => (
                 <div>
                     <EditOutlined className="cart-edit mx-2" onClick={() => handleEdit(record)} />
@@ -184,17 +161,18 @@ const Customers = () => {
     return (
         <Layout>
             <div className="d-flex justify-content-between align-items-center mb-4">
-                <h2>All Customers</h2>
+                <h2>Clientes</h2>
+
                 <div className="d-flex gap-3">
                     <Input
-                        placeholder="Search by phone number"
-                        value={searchPhone}
-                        onChange={handlePhoneInput}
-                        style={{ width: '200px' }}
-                        prefix="+880"
+                        placeholder="Buscar por nombre"
+                        value={searchName}
+                        onChange={e => setSearchName(e.target.value)}
+                        style={{ width: '220px' }}
                         suffix={<SearchOutlined />}
-                        maxLength={15}
+                        maxLength={60}
                     />
+
                     <Button
                         className="add-new"
                         onClick={() => {
@@ -203,23 +181,24 @@ const Customers = () => {
                             setPopModal(true);
                         }}
                     >
-                        Add Customer
+                        Agregar cliente
                     </Button>
                 </div>
             </div>
 
             <Table
-                dataSource={searchPhone ? searchResults : customersData}
+                dataSource={filteredCustomers}
                 columns={columns}
                 bordered
                 pagination={false}
+                rowKey="_id"
                 locale={{
-                    emptyText: searchPhone ? 'No matching customers found' : 'No customers available',
+                    emptyText: searchName ? 'No se encontraron clientes coincidentes' : 'No hay clientes disponibles',
                 }}
             />
 
             <Modal
-                title={editCustomer ? 'Edit Customer' : 'Add New Customer'}
+                title={editCustomer ? 'Editar cliente' : 'Agregar nuevo cliente'}
                 visible={popModal}
                 onCancel={() => {
                     setPopModal(false);
@@ -228,20 +207,39 @@ const Customers = () => {
                 }}
                 footer={false}
             >
-                <Form layout="vertical" onFinish={handlerSubmit} form={form} initialValues={editCustomer}>
-                    <FormItem name="name" label="Customer Name" rules={[{ required: true, message: 'Please enter customer name' }]}>
+                <Form layout="vertical" onFinish={handlerSubmit} form={form}>
+                    <FormItem
+                        name="cedulaRuc"
+                        label="Cédula o RUC"
+                        rules={[{ required: true, message: 'Ingresa la cédula o RUC' }]}
+                    >
+                        <Input
+                            maxLength={13}
+                            onChange={e => {
+                                const v = e.target.value.replace(/\s+/g, '');
+                                form.setFieldsValue({ cedulaRuc: v });
+                            }}
+                        />
+                    </FormItem>
+
+                    <FormItem
+                        name="name"
+                        label="Nombre"
+                        rules={[{ required: true, message: 'Ingresa el nombre' }]}
+                    >
                         <Input />
                     </FormItem>
+
                     <FormItem
                         name="phone"
-                        label="Contact Number"
+                        label="Teléfono"
                         rules={[
-                            { required: true, message: 'Please enter contact number' },
-                            { pattern: /^\d+$/, message: 'Please enter only numbers' },
+                            { required: true, message: 'Ingresa el teléfono' },
+                            { pattern: /^\d+$/, message: 'Ingresa solo números' },
                         ]}
                     >
                         <Input
-                            prefix="+880"
+                            prefix="+593"
                             maxLength={15}
                             onChange={e => {
                                 const value = e.target.value.replace(/\D/g, '');
@@ -249,13 +247,18 @@ const Customers = () => {
                             }}
                         />
                     </FormItem>
-                    <FormItem name="address" label="Customer Address" rules={[{ required: true, message: 'Please enter customer address' }]}>
+
+                    <FormItem
+                        name="address"
+                        label="Dirección"
+                        rules={[{ required: true, message: 'Ingresa la dirección' }]}
+                    >
                         <Input />
                     </FormItem>
 
                     <div className="form-btn-add">
                         <Button htmlType="submit" className="add-new">
-                            {editCustomer ? 'Update' : 'Add'}
+                            {editCustomer ? 'Actualizar' : 'Guardar'}
                         </Button>
                     </div>
                 </Form>

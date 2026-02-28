@@ -11,32 +11,41 @@ const Login = () => {
     const navigate = useNavigate();
 
     const handlerSubmit = async value => {
-        console.log('value login', value);
         try {
-            dispatch({
-                type: 'SHOW_LOADING',
-            });
-            const res = await axios.post('/api/users/login', value);
-            dispatch({
-                type: 'HIDE_LOADING',
-            });
+            dispatch({ type: 'SHOW_LOADING' });
 
-            message.success('User Login Successfully!');
-            //delete res.data.password
-            delete res?.data?.user?.password;
-            localStorage.setItem('auth', JSON.stringify(res?.data?.user));
+            const res = await axios.post('/api/users/login', value);
+
+            dispatch({ type: 'HIDE_LOADING' });
+
+            // ✅ BLINDADO: dependiendo de tu backend, el user puede venir en res.data.user o res.data
+            const user = res?.data?.user ? res.data.user : res?.data?.user?.user ? res.data.user.user : res?.data;
+
+            if (!user?._id) {
+                message.error('Respuesta inválida del servidor (no llegó user)');
+                return;
+            }
+
+            // ✅ Guardar SOLO lo necesario (incluye role y code)
+            const safeUser = {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                code: user.code,
+            };
+
+            localStorage.setItem('auth', JSON.stringify(safeUser));
+            message.success('Inicio de sesión correcto');
             navigate('/');
         } catch (error) {
-            dispatch({
-                type: 'HIDE_LOADING',
-            });
-            message.error(error.response.data.message);
+            dispatch({ type: 'HIDE_LOADING' });
+            message.error(error?.response?.data?.message || 'Error al iniciar sesión');
         }
     };
 
     useEffect(() => {
         if (localStorage.getItem('auth')) {
-            localStorage.getItem('auth');
             navigate('/');
         }
     }, [navigate]);
@@ -44,22 +53,26 @@ const Login = () => {
     return (
         <div className="form">
             <img src={logo} alt="logo" className="brand-logo-lg" />
-            <h2>Welcome to Smart Inventory Management System</h2>
-            <p>Login</p>
+            <h2>Bienvenido al Sistema de Gestión de Inventario</h2>
+            <p>Iniciar sesión</p>
+
             <div className="form-group">
                 <Form layout="vertical" onFinish={handlerSubmit}>
-                    <FormItem name="email" label="Email Address">
-                        <Input placeholder="Enter Email Address" />
+                    <FormItem name="email" label="Correo electrónico" rules={[{ required: true, message: 'Ingresa tu correo' }]}>
+                        <Input placeholder="Ingresa tu correo" />
                     </FormItem>
-                    <FormItem name="password" label="Password">
-                        <Input type="password" placeholder="Enter Password" />
+
+                    <FormItem name="password" label="Contraseña" rules={[{ required: true, message: 'Ingresa tu contraseña' }]}>
+                        <Input type="password" placeholder="Ingresa tu contraseña" />
                     </FormItem>
+
                     <div className="form-btn-add">
                         <Button htmlType="submit" className="add-new">
-                            Login
+                            Ingresar
                         </Button>
+
                         <Link className="form-other" to="/register">
-                            Register Here!
+                            Registrarse
                         </Link>
                     </div>
                 </Form>

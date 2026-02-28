@@ -12,6 +12,7 @@
   "author": "amPhilip",
   "license": "ISC",
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "body-parser": "^1.20.0",
     "color": "^4.2.3",
     "concurrently": "^7.2.1",

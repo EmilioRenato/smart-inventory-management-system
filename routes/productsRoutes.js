@@ -1,16 +1,22 @@
 import express from 'express';
-import { addProductController, deleteProductController, getProductController, seedsProductController, updateProductController } from '../controllers/productController.js';
+import {
+    addProductController,
+    deleteProductController,
+    getProductController,
+    seedsProductController,
+    updateProductController,
+    decrementProductSizesController,
+} from '../controllers/productController.js';
 
-const productRouter = express.Router();
+const router = express.Router();
 
-productRouter.get('/getproducts', getProductController);
+router.get('/getproducts', getProductController);
+router.post('/addproducts', addProductController);
+router.put('/updateproducts', updateProductController);
+router.post('/deleteproducts', deleteProductController);
+router.get('/seeds', seedsProductController);
 
-productRouter.post('/addproducts', addProductController);
+// ✅ NUEVO: descontar por tallas
+router.post('/decrement-sizes', decrementProductSizesController);
 
-productRouter.put('/updateproducts', updateProductController);
-
-productRouter.post('/deleteproducts', deleteProductController);
-
-productRouter.post('/seeds', seedsProductController);
-
-export default productRouter;
+export default router;
