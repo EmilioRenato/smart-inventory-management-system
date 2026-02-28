@@ -1,6 +1,7 @@
-import { Col, Empty, Row } from 'antd';
+import { Col, Empty, Row, Input } from 'antd';
+import { SearchOutlined } from '@ant-design/icons';
 import axios from 'axios';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useDispatch } from 'react-redux';
 import LayoutApp from '../../components/Layout';
 import Product from '../../components/Product';
@@ -16,50 +17,75 @@ const Home = () => {
 
     const [productData, setProductData] = useState([]);
     const [selectedCategory, setSelectedCategory] = useState('all');
+    const [searchQuery, setSearchQuery] = useState('');
 
-    // 🔥 Ahora GLOBAL (sin createdBy)
+    // =============================
+    // GET PRODUCTS GLOBAL
+    // =============================
+    const getAllProducts = async () => {
+        try {
+            dispatch({ type: 'SHOW_LOADING' });
+
+            const { data } = await axios.get('/api/products/getproducts');
+
+            setProductData(Array.isArray(data) ? data : []);
+
+            dispatch({ type: 'HIDE_LOADING' });
+        } catch (error) {
+            dispatch({ type: 'HIDE_LOADING' });
+            console.log(error);
+        }
+    };
+
     useEffect(() => {
-        const getAllProducts = async () => {
-            try {
-                dispatch({ type: 'SHOW_LOADING' });
-
-                const { data } = await axios.get('/api/products/getproducts');
-
-                setProductData(Array.isArray(data) ? data : []);
-
-                dispatch({ type: 'HIDE_LOADING' });
-            } catch (error) {
-                dispatch({ type: 'HIDE_LOADING' });
-                console.log(error);
-            }
-        };
-
         getAllProducts();
-    }, [dispatch]);
+    }, []);
 
     const categories = [
         { name: 'all', label: 'Todos', imageUrl: allCategories },
-        { name: 'futbol', label: 'Equipo de fútbol', imageUrl: futbolImg },
-        { name: 'zapatos', label: 'Zapatos', imageUrl: zapatosImg },
-        { name: 'ropa', label: 'Ropa deportiva', imageUrl: ropaImg },
+        { name: 'pizzas', label: 'Equipo de fútbol', imageUrl: futbolImg },
+        { name: 'burgers', label: 'Zapatos', imageUrl: zapatosImg },
+        { name: 'drinks', label: 'Ropa deportiva', imageUrl: ropaImg },
     ];
 
-    const filteredProducts =
-        selectedCategory === 'all'
-            ? productData
-            : productData.filter(
-                  product => product.category === selectedCategory
-              );
+    // =============================
+    // FILTRO POR CATEGORÍA + BUSCADOR
+    // =============================
+    const filteredProducts = useMemo(() => {
+        let filtered = productData;
+
+        if (selectedCategory !== 'all') {
+            filtered = filtered.filter(
+                product => product.category === selectedCategory
+            );
+        }
+
+        if (searchQuery) {
+            filtered = filtered.filter(product =>
+                product.name.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+        }
+
+        return filtered;
+    }, [productData, selectedCategory, searchQuery]);
 
     return (
         <LayoutApp>
-            <h2>Punto de venta</h2>
+            <div className="d-flex justify-content-between align-items-center mb-3">
+                <h2>Punto de venta</h2>
+
+                <Input
+                    placeholder="Buscar producto..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    suffix={<SearchOutlined />}
+                    style={{ width: 250 }}
+                />
+            </div>
 
             {productData.length === 0 ? (
                 <div className="no-product">
-                    <h3 className="no-product-text">
-                        No se encontraron productos
-                    </h3>
+                    <h3>No se encontraron productos</h3>
                     <Empty />
                 </div>
             ) : (
@@ -91,20 +117,26 @@ const Home = () => {
                     </div>
 
                     <Row>
-                        {filteredProducts.map(product => (
-                            <Col
-                                xs={24}
-                                sm={6}
-                                md={6}
-                                lg={6}
-                                key={product._id}
-                            >
-                                <Product
-                                    product={product}
-                                    enableSizeSelect={true}
-                                />
+                        {filteredProducts.length === 0 ? (
+                            <Col span={24}>
+                                <Empty description="No se encontraron productos" />
                             </Col>
-                        ))}
+                        ) : (
+                            filteredProducts.map(product => (
+                                <Col
+                                    xs={24}
+                                    sm={6}
+                                    md={6}
+                                    lg={6}
+                                    key={product._id}
+                                >
+                                    <Product
+                                        product={product}
+                                        enableSizeSelect={true}
+                                    />
+                                </Col>
+                            ))
+                        )}
                     </Row>
                 </>
             )}
