@@ -1,12 +1,8 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "Inventario",
+  "name": "Sistema de Inventario y POS",
+  "description": "Inventario, ventas, clientes, notas de venta y dashboard",
   "icons": [
-    {
-      "src": "favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
-    },
     {
       "src": "logo192.png",
       "type": "image/png",
@@ -19,7 +15,8 @@
     }
   ],
   "start_url": ".",
+  "scope": ".",
   "display": "standalone",
-  "theme_color": "#000000",
+  "theme_color": "#1677ff",
   "background_color": "#ffffff"
 }

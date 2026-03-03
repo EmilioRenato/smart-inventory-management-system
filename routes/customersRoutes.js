@@ -5,15 +5,19 @@ import {
   getCustomerController,
   updateCustomerController,
   getCustomerByCedulaController,
+  exportCustomersExcelController,
 } from '../controllers/customerController.js';
 
 const customerRouter = express.Router();
 
-// Por tienda
+// GLOBAL
 customerRouter.get('/get-customers', getCustomerController);
 
 // Autocompletar por cédula/RUC
 customerRouter.get('/get-customer-by-cedula', getCustomerByCedulaController);
+
+// ✅ Export Excel (opcional: ?createdBy=xxxx)
+customerRouter.get('/export-excel', exportCustomersExcelController);
 
 customerRouter.post('/add-customers', addCustomerController);
 customerRouter.put('/update-customers', updateCustomerController);

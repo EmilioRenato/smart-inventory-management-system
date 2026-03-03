@@ -1,9 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import {Provider} from 'react-redux';
+import { Provider } from 'react-redux';
 import './index.css';
 import App from './App';
 import store from './redux/store';
+import { register as registerServiceWorker } from './serviceWorkerRegistration';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
@@ -11,3 +12,6 @@ root.render(
     <App />
   </Provider>
 );
+
+// ✅ PWA: registrar Service Worker (solo en producción)
+registerServiceWorker();

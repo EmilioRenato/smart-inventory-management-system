@@ -8,6 +8,7 @@ import billsRouter from './routes/billsRoutes.js';
 import customerRouter from './routes/customersRoutes.js';
 import productRouter from './routes/productsRoutes.js';
 import userRouter from './routes/userRoutes.js';
+import dashboardRouter from './routes/dashboardRoutes.js';
 
 dotenv.config();
 
@@ -35,6 +36,7 @@ app.use('/api/products', productRouter);
 app.use('/api/users', userRouter);
 app.use('/api/bills', billsRouter);
 app.use('/api/customers', customerRouter);
+app.use('/api/dashboard',dashboardRouter);
 
 // Port
 const PORT = process.env.PORT || 5000;
