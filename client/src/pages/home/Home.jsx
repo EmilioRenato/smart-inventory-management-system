@@ -19,17 +19,11 @@ const Home = () => {
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
 
-    // =============================
-    // GET PRODUCTS GLOBAL
-    // =============================
     const getAllProducts = async () => {
         try {
             dispatch({ type: 'SHOW_LOADING' });
-
             const { data } = await axios.get('/api/products/getproducts');
-
             setProductData(Array.isArray(data) ? data : []);
-
             dispatch({ type: 'HIDE_LOADING' });
         } catch (error) {
             dispatch({ type: 'HIDE_LOADING' });
@@ -39,6 +33,7 @@ const Home = () => {
 
     useEffect(() => {
         getAllProducts();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const categories = [
@@ -48,9 +43,6 @@ const Home = () => {
         { name: 'drinks', label: 'Ropa deportiva', imageUrl: ropaImg },
     ];
 
-    // =============================
-    // FILTRO POR CATEGORÍA + BUSCADOR
-    // =============================
     const filteredProducts = useMemo(() => {
         let filtered = productData;
 
@@ -62,7 +54,9 @@ const Home = () => {
 
         if (searchQuery) {
             filtered = filtered.filter(product =>
-                product.name.toLowerCase().includes(searchQuery.toLowerCase())
+                String(product?.name || '')
+                    .toLowerCase()
+                    .includes(searchQuery.toLowerCase())
             );
         }
 
@@ -71,15 +65,28 @@ const Home = () => {
 
     return (
         <LayoutApp>
-            <div className="d-flex justify-content-between align-items-center mb-3">
-                <h2>Punto de venta</h2>
+            <div
+                style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: 12,
+                    flexWrap: 'wrap',
+                    marginBottom: 18,
+                }}
+            >
+                <h2 style={{ margin: 0 }}>Punto de venta</h2>
 
                 <Input
                     placeholder="Buscar producto..."
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     suffix={<SearchOutlined />}
-                    style={{ width: 250 }}
+                    style={{
+                        width: '100%',
+                        maxWidth: 340,
+                        minWidth: 220,
+                    }}
                 />
             </div>
 
@@ -90,7 +97,15 @@ const Home = () => {
                 </div>
             ) : (
                 <>
-                    <div className="category">
+                    <div
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns:
+                                'repeat(auto-fit, minmax(150px, 1fr))',
+                            gap: 12,
+                            marginBottom: 20,
+                        }}
+                    >
                         {categories.map(category => (
                             <div
                                 key={category.name}
@@ -99,24 +114,44 @@ const Home = () => {
                                         ? 'category-active'
                                         : ''
                                 }`}
-                                onClick={() =>
-                                    setSelectedCategory(category.name)
-                                }
+                                onClick={() => setSelectedCategory(category.name)}
+                                style={{
+                                    cursor: 'pointer',
+                                    borderRadius: 14,
+                                    padding: 12,
+                                    minHeight: 92,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: 10,
+                                }}
                             >
-                                <h3 className="categoryName">
+                                <h3
+                                    className="categoryName"
+                                    style={{
+                                        margin: 0,
+                                        fontSize: 15,
+                                        lineHeight: 1.2,
+                                    }}
+                                >
                                     {category.label}
                                 </h3>
+
                                 <img
                                     src={category.imageUrl}
                                     alt={category.label}
-                                    height={60}
-                                    width={60}
+                                    style={{
+                                        width: 52,
+                                        height: 52,
+                                        objectFit: 'contain',
+                                        flexShrink: 0,
+                                    }}
                                 />
                             </div>
                         ))}
                     </div>
 
-                    <Row>
+                    <Row gutter={[16, 16]}>
                         {filteredProducts.length === 0 ? (
                             <Col span={24}>
                                 <Empty description="No se encontraron productos" />
@@ -125,9 +160,10 @@ const Home = () => {
                             filteredProducts.map(product => (
                                 <Col
                                     xs={24}
-                                    sm={6}
-                                    md={6}
-                                    lg={6}
+                                    sm={12}
+                                    md={12}
+                                    lg={8}
+                                    xl={6}
                                     key={product._id}
                                 >
                                     <Product

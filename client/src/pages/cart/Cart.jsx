@@ -61,19 +61,62 @@ const Cart = () => {
     };
 
     const columns = [
-        { title: 'Nombre', dataIndex: 'name' },
+        {
+            title: 'Producto',
+            dataIndex: 'name',
+            render: (_, record) => (
+                <div style={{ minWidth: 180 }}>
+                    <div style={{ fontWeight: 700 }}>{record?.name}</div>
+                    {Array.isArray(record?.sizeOrders) &&
+                        record.sizeOrders.length > 0 && (
+                            <div
+                                style={{
+                                    fontSize: 12,
+                                    color: '#666',
+                                    marginTop: 4,
+                                }}
+                            >
+                                {record.sizeOrders
+                                    .map(
+                                        s =>
+                                            `${s.size}: ${Number(
+                                                s.quantity || 0
+                                            )}`
+                                    )
+                                    .join(' | ')}
+                            </div>
+                        )}
+                </div>
+            ),
+        },
         {
             title: 'Precio',
             dataIndex: 'price',
-            render: price => <strong>${price}</strong>,
+            render: price => <strong>${Number(price || 0).toFixed(2)}</strong>,
+            width: 110,
         },
         {
             title: 'Cantidad',
             dataIndex: 'quantity',
             render: q => <strong>{q}</strong>,
+            width: 100,
+        },
+        {
+            title: 'Subtotal',
+            render: (_, record) => (
+                <strong>
+                    $
+                    {(
+                        Number(record?.price || 0) *
+                        Number(record?.quantity || 0)
+                    ).toFixed(2)}
+                </strong>
+            ),
+            width: 120,
         },
         {
             title: 'Acción',
+            width: 90,
             render: (_, record) => (
                 <DeleteOutlined
                     className="cart-action"
@@ -302,7 +345,50 @@ const Cart = () => {
 
     return (
         <Layout>
-            <h2>Carrito</h2>
+            <div
+                style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: 12,
+                    flexWrap: 'wrap',
+                    marginBottom: 16,
+                }}
+            >
+                <h2 style={{ margin: 0 }}>Carrito</h2>
+
+                {cartItems.length > 0 && (
+                    <div
+                        style={{
+                            display: 'flex',
+                            gap: 12,
+                            flexWrap: 'wrap',
+                            alignItems: 'center',
+                        }}
+                    >
+                        <div
+                            style={{
+                                background: '#f5f5f5',
+                                padding: '8px 12px',
+                                borderRadius: 12,
+                                fontWeight: 700,
+                            }}
+                        >
+                            Items: {cartItems.length}
+                        </div>
+                        <div
+                            style={{
+                                background: '#f5f5f5',
+                                padding: '8px 12px',
+                                borderRadius: 12,
+                                fontWeight: 700,
+                            }}
+                        >
+                            Total: ${subTotal.toFixed(2)}
+                        </div>
+                    </div>
+                )}
+            </div>
 
             {cartItems.length === 0 ? (
                 <div className="empty-cart">
@@ -311,17 +397,46 @@ const Cart = () => {
                 </div>
             ) : (
                 <div>
-                    <Table
-                        dataSource={cartItems}
-                        columns={columns}
-                        bordered
-                        rowKey={r => r.cartKey || r._id}
-                    />
+                    <div style={{ overflowX: 'auto' }}>
+                        <Table
+                            dataSource={cartItems}
+                            columns={columns}
+                            bordered
+                            rowKey={r => r.cartKey || r._id}
+                            pagination={false}
+                            scroll={{ x: 720 }}
+                        />
+                    </div>
 
-                    <div className="subTotal">
-                        <h2>
-                            Precio sugerido: <span>${subTotal.toFixed(2)}</span>
-                        </h2>
+                    <div
+                        className="subTotal"
+                        style={{
+                            marginTop: 18,
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            gap: 14,
+                            flexWrap: 'wrap',
+                            padding: 16,
+                            borderRadius: 14,
+                            background: '#fafafa',
+                        }}
+                    >
+                        <div>
+                            <h2 style={{ margin: 0, fontSize: 22 }}>
+                                Precio sugerido:{' '}
+                                <span>${subTotal.toFixed(2)}</span>
+                            </h2>
+                            <div
+                                style={{
+                                    marginTop: 6,
+                                    fontSize: 13,
+                                    color: '#666',
+                                }}
+                            >
+                                El total negociado lo defines al generar la nota
+                            </div>
+                        </div>
 
                         <Button
                             onClick={() => setBillPopUp(true)}
@@ -336,121 +451,139 @@ const Cart = () => {
                         visible={billPopUp}
                         onCancel={() => setBillPopUp(false)}
                         footer={false}
+                        width={720}
+                        bodyStyle={{ padding: 16 }}
                     >
                         <Form layout="vertical" onFinish={handlerSubmit} form={form}>
-                            <Form.Item
-                                name="sellerCode"
-                                label="Código del vendedor (5 dígitos)"
-                                rules={[
-                                    {
-                                        required: true,
-                                        message:
-                                            'Ingresa el código del vendedor',
-                                    },
-                                ]}
+                            <div
+                                style={{
+                                    display: 'grid',
+                                    gridTemplateColumns:
+                                        'repeat(auto-fit, minmax(220px, 1fr))',
+                                    gap: 12,
+                                }}
                             >
-                                <Input maxLength={5} />
-                            </Form.Item>
+                                <Form.Item
+                                    name="sellerCode"
+                                    label="Código del vendedor (5 dígitos)"
+                                    rules={[
+                                        {
+                                            required: true,
+                                            message:
+                                                'Ingresa el código del vendedor',
+                                        },
+                                    ]}
+                                >
+                                    <Input maxLength={5} />
+                                </Form.Item>
 
-                            <Form.Item
-                                name="cedula"
-                                label="Cédula / RUC"
-                                rules={[
-                                    {
-                                        required: true,
-                                        message: 'Ingresa cédula o RUC',
-                                    },
-                                ]}
+                                <Form.Item
+                                    name="cedula"
+                                    label="Cédula / RUC"
+                                    rules={[
+                                        {
+                                            required: true,
+                                            message: 'Ingresa cédula o RUC',
+                                        },
+                                    ]}
+                                >
+                                    <Input
+                                        onBlur={e =>
+                                            autoFillByCedula(e.target.value)
+                                        }
+                                    />
+                                </Form.Item>
+
+                                <Form.Item
+                                    name="name"
+                                    label="Nombre del cliente"
+                                    rules={[
+                                        {
+                                            required: true,
+                                            message: 'Ingresa nombre',
+                                        },
+                                    ]}
+                                >
+                                    <Input />
+                                </Form.Item>
+
+                                <Form.Item
+                                    name="phone"
+                                    label="Teléfono"
+                                    rules={[
+                                        {
+                                            required: true,
+                                            message: 'Ingresa teléfono',
+                                        },
+                                    ]}
+                                >
+                                    <Input />
+                                </Form.Item>
+
+                                <Form.Item
+                                    name="address"
+                                    label="Dirección"
+                                    rules={[
+                                        {
+                                            required: true,
+                                            message: 'Ingresa dirección',
+                                        },
+                                    ]}
+                                >
+                                    <Input />
+                                </Form.Item>
+
+                                <Form.Item
+                                    name="email"
+                                    label="Correo electrónico"
+                                    rules={[
+                                        {
+                                            type: 'email',
+                                            message: 'Ingresa un correo válido',
+                                        },
+                                    ]}
+                                >
+                                    <Input placeholder="cliente@correo.com" />
+                                </Form.Item>
+
+                                <Form.Item
+                                    name="paymentMethod"
+                                    label="Método de pago"
+                                    rules={[
+                                        {
+                                            required: true,
+                                            message: 'Selecciona método',
+                                        },
+                                    ]}
+                                >
+                                    <Select>
+                                        <Select.Option value="cash">
+                                            Efectivo
+                                        </Select.Option>
+                                        <Select.Option value="transfer">
+                                            Transferencia
+                                        </Select.Option>
+                                        <Select.Option value="card">
+                                            Tarjeta
+                                        </Select.Option>
+                                    </Select>
+                                </Form.Item>
+                            </div>
+
+                            <div
+                                style={{
+                                    marginTop: 8,
+                                    padding: 14,
+                                    borderRadius: 12,
+                                    background: '#fafafa',
+                                }}
                             >
-                                <Input
-                                    onBlur={e =>
-                                        autoFillByCedula(e.target.value)
-                                    }
-                                />
-                            </Form.Item>
-
-                            <Form.Item
-                                name="name"
-                                label="Nombre del cliente"
-                                rules={[
-                                    {
-                                        required: true,
-                                        message: 'Ingresa nombre',
-                                    },
-                                ]}
-                            >
-                                <Input />
-                            </Form.Item>
-
-                            <Form.Item
-                                name="phone"
-                                label="Teléfono"
-                                rules={[
-                                    {
-                                        required: true,
-                                        message: 'Ingresa teléfono',
-                                    },
-                                ]}
-                            >
-                                <Input />
-                            </Form.Item>
-
-                            <Form.Item
-                                name="address"
-                                label="Dirección"
-                                rules={[
-                                    {
-                                        required: true,
-                                        message: 'Ingresa dirección',
-                                    },
-                                ]}
-                            >
-                                <Input />
-                            </Form.Item>
-
-                            <Form.Item
-                                name="email"
-                                label="Correo electrónico"
-                                rules={[
-                                    {
-                                        type: 'email',
-                                        message: 'Ingresa un correo válido',
-                                    },
-                                ]}
-                            >
-                                <Input placeholder="cliente@correo.com" />
-                            </Form.Item>
-
-                            <Form.Item
-                                name="paymentMethod"
-                                label="Método de pago"
-                                rules={[
-                                    {
-                                        required: true,
-                                        message: 'Selecciona método',
-                                    },
-                                ]}
-                            >
-                                <Select>
-                                    <Select.Option value="cash">
-                                        Efectivo
-                                    </Select.Option>
-                                    <Select.Option value="transfer">
-                                        Transferencia
-                                    </Select.Option>
-                                    <Select.Option value="card">
-                                        Tarjeta
-                                    </Select.Option>
-                                </Select>
-                            </Form.Item>
-
-                            <div style={{ marginTop: 10 }}>
-                                <p>
+                                <p style={{ marginBottom: 8 }}>
                                     <b>Precio sugerido:</b> $
                                     {subTotal.toFixed(2)}
                                 </p>
 
-                                <p style={{ marginBottom: 6 }}>
+                                <p style={{ marginBottom: 8 }}>
                                     <b>Precio a pagar (negociado):</b>
                                 </p>
 
@@ -463,17 +596,21 @@ const Cart = () => {
                                     style={{ width: '100%' }}
                                 />
 
-                                <p style={{ marginTop: 10 }}>
+                                <p style={{ marginTop: 12, marginBottom: 0 }}>
                                     <b>Descuento aplicado:</b> $
                                     {discount.toFixed(2)}
                                 </p>
                             </div>
 
-                            <div className="form-btn-add">
-                                <Button
-                                    htmlType="submit"
-                                    className="add-new"
-                                >
+                            <div
+                                className="form-btn-add"
+                                style={{
+                                    marginTop: 16,
+                                    display: 'flex',
+                                    justifyContent: 'flex-end',
+                                }}
+                            >
+                                <Button htmlType="submit" className="add-new">
                                     Generar nota de venta
                                 </Button>
                             </div>

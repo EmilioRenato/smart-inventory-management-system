@@ -93,23 +93,27 @@ const Bills = () => {
     const columns = [
         {
             title: 'N.º Nota',
+            width: 90,
             render: (_, __, index) => String(billsData.length - index).padStart(3, '0'),
         },
-        { title: 'Cliente', dataIndex: 'customerName' },
-        { title: 'Cédula/RUC', dataIndex: 'customerCedula' },
-        { title: 'Teléfono', dataIndex: 'customerPhone' },
+        { title: 'Cliente', dataIndex: 'customerName', width: 180 },
+        { title: 'Cédula/RUC', dataIndex: 'customerCedula', width: 140 },
+        { title: 'Teléfono', dataIndex: 'customerPhone', width: 120 },
         {
             title: 'Correo',
             dataIndex: 'customerEmail',
+            width: 220,
             render: v => v || '-',
         },
         {
             title: 'Total pagado',
             dataIndex: 'paidTotal',
+            width: 120,
             render: v => <b>${Number(v || 0).toFixed(2)}</b>,
         },
         {
             title: 'Acción',
+            width: 80,
             render: (_, record) => (
                 <EyeOutlined
                     className="cart-edit eye"
@@ -128,25 +132,53 @@ const Bills = () => {
 
     return (
         <Layout>
-            <h2>Notas de venta</h2>
+            <div
+                style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: 12,
+                    flexWrap: 'wrap',
+                    marginBottom: 16,
+                }}
+            >
+                <h2 style={{ margin: 0 }}>Notas de venta</h2>
 
-            <Table
-                dataSource={billsData}
-                columns={columns}
-                bordered
-                rowKey="_id"
-            />
+                <div
+                    style={{
+                        background: '#f5f5f5',
+                        padding: '8px 12px',
+                        borderRadius: 12,
+                        fontWeight: 700,
+                    }}
+                >
+                    Total: {billsData.length}
+                </div>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+                <Table
+                    dataSource={billsData}
+                    columns={columns}
+                    bordered
+                    rowKey="_id"
+                    size="small"
+                    scroll={{ x: 950 }}
+                    pagination={{ pageSize: 8 }}
+                />
+            </div>
 
             {popModal && selectedBill && (
                 <Modal
                     title="Detalle de la nota de venta"
-                    width={720}
+                    width={760}
                     visible={popModal}
                     onCancel={() => {
                         setPopModal(false);
                         setSelectedBill(null);
                     }}
                     footer={false}
+                    bodyStyle={{ padding: 16 }}
                 >
                     <div
                         className="card"
@@ -159,6 +191,8 @@ const Bills = () => {
                                     display: 'flex',
                                     justifyContent: 'space-between',
                                     alignItems: 'baseline',
+                                    gap: 12,
+                                    flexWrap: 'wrap',
                                 }}
                             >
                                 <h3 className="logo" style={{ margin: 0 }}>
@@ -179,7 +213,8 @@ const Bills = () => {
                             <div
                                 style={{
                                     display: 'grid',
-                                    gridTemplateColumns: '1fr 1fr',
+                                    gridTemplateColumns:
+                                        'repeat(auto-fit, minmax(220px, 1fr))',
                                     gap: 10,
                                 }}
                             >
@@ -211,7 +246,8 @@ const Bills = () => {
                             <div
                                 style={{
                                     display: 'grid',
-                                    gridTemplateColumns: '1fr 1fr',
+                                    gridTemplateColumns:
+                                        'repeat(auto-fit, minmax(220px, 1fr))',
                                     gap: 10,
                                 }}
                             >
@@ -251,40 +287,44 @@ const Bills = () => {
 
                             <h4 style={{ marginBottom: 10 }}>Detalle de productos</h4>
 
-                            <Table
-                                dataSource={detailRows}
-                                pagination={false}
-                                bordered
-                                size="small"
-                                columns={[
-                                    {
-                                        title: 'Producto',
-                                        dataIndex: 'producto',
-                                    },
-                                    {
-                                        title: 'Talla',
-                                        dataIndex: 'talla',
-                                        width: 90,
-                                    },
-                                    {
-                                        title: 'Cant.',
-                                        dataIndex: 'cantidad',
-                                        width: 80,
-                                    },
-                                    {
-                                        title: 'P. Unit',
-                                        dataIndex: 'precioUnit',
-                                        width: 100,
-                                        render: v => `$${Number(v || 0).toFixed(2)}`,
-                                    },
-                                    {
-                                        title: 'Subtotal',
-                                        dataIndex: 'subtotal',
-                                        width: 110,
-                                        render: v => <b>${Number(v || 0).toFixed(2)}</b>,
-                                    },
-                                ]}
-                            />
+                            <div style={{ overflowX: 'auto' }}>
+                                <Table
+                                    dataSource={detailRows}
+                                    pagination={false}
+                                    bordered
+                                    size="small"
+                                    scroll={{ x: 600 }}
+                                    columns={[
+                                        {
+                                            title: 'Producto',
+                                            dataIndex: 'producto',
+                                            width: 220,
+                                        },
+                                        {
+                                            title: 'Talla',
+                                            dataIndex: 'talla',
+                                            width: 90,
+                                        },
+                                        {
+                                            title: 'Cant.',
+                                            dataIndex: 'cantidad',
+                                            width: 80,
+                                        },
+                                        {
+                                            title: 'P. Unit',
+                                            dataIndex: 'precioUnit',
+                                            width: 100,
+                                            render: v => `$${Number(v || 0).toFixed(2)}`,
+                                        },
+                                        {
+                                            title: 'Subtotal',
+                                            dataIndex: 'subtotal',
+                                            width: 110,
+                                            render: v => <b>${Number(v || 0).toFixed(2)}</b>,
+                                        },
+                                    ]}
+                                />
+                            </div>
 
                             <div
                                 style={{
@@ -293,7 +333,7 @@ const Bills = () => {
                                     justifyContent: 'flex-end',
                                 }}
                             >
-                                <div style={{ width: 320 }}>
+                                <div style={{ width: '100%', maxWidth: 320 }}>
                                     <div
                                         style={{
                                             display: 'flex',
@@ -336,6 +376,7 @@ const Bills = () => {
                                             display: 'flex',
                                             justifyContent: 'space-between',
                                             marginTop: 6,
+                                            gap: 10,
                                         }}
                                     >
                                         <span style={{ color: '#666' }}>Método de pago:</span>
@@ -359,7 +400,11 @@ const Bills = () => {
 
                     <div
                         className="bills-btn-add"
-                        style={{ marginTop: 12, textAlign: 'right' }}
+                        style={{
+                            marginTop: 12,
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                        }}
                     >
                         <Button onClick={handlePrint} className="add-new">
                             Imprimir nota

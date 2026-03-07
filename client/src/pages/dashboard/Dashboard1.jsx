@@ -19,7 +19,6 @@ const labelByLevel = lvl => {
   return 'Sin tallas';
 };
 
-// Pie chart simple con conic-gradient (sin librerías)
 const SellerPie = ({ data }) => {
   const total = data.reduce((s, x) => s + Number(x.value || 0), 0);
   const safe = total > 0 ? total : 1;
@@ -36,7 +35,9 @@ const SellerPie = ({ data }) => {
     return { ...d, pct, start, end, color: c };
   });
 
-  const bg = `conic-gradient(${stops.map(s => `${s.color} ${s.start}% ${s.end}%`).join(', ')})`;
+  const bg = `conic-gradient(${stops
+    .map(s => `${s.color} ${s.start}% ${s.end}%`)
+    .join(', ')})`;
 
   return (
     <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -48,10 +49,11 @@ const SellerPie = ({ data }) => {
           background: bg,
           boxShadow: '0 10px 20px rgba(0,0,0,0.08)',
           border: '6px solid #fff',
+          flexShrink: 0,
         }}
         title="Ventas por vendedor"
       />
-      <div style={{ minWidth: 260 }}>
+      <div style={{ minWidth: 240, flex: 1 }}>
         {stops.slice(0, 8).map((s, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
             <span style={{ width: 10, height: 10, borderRadius: 3, background: s.color, display: 'inline-block' }} />
@@ -80,28 +82,38 @@ const Dashboard1 = () => {
     }
   };
 
-  // ✅ Descarga Excel SIN usar React Router
-  const downloadCustomersExcel = async () => {
+  const handleExportCustomers = async () => {
     try {
-      const res = await axios.get('/api/customers/export-excel', {
+      const response = await axios.get('/api/customers/export-excel', {
         responseType: 'blob',
       });
 
-      const blob = new Blob([res.data], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      const blob = new Blob([response.data], {
+        type: response.headers['content-type'] || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       });
 
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `clientes_${new Date().toISOString().slice(0, 10)}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      const link = document.createElement('a');
+      link.href = url;
+
+      const disposition = response.headers['content-disposition'];
+      let fileName = 'clientes.xlsx';
+
+      if (disposition) {
+        const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (match && match[1]) {
+          fileName = match[1].replace(/['"]/g, '');
+        }
+      }
+
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
       window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.log(err);
-      message.error('No se pudo descargar el Excel (revisa backend / ruta).');
+    } catch (error) {
+      console.log(error);
+      message.error('No se pudo exportar el Excel de clientes');
     }
   };
 
@@ -109,12 +121,12 @@ const Dashboard1 = () => {
     fetchSummary();
   }, []);
 
-  const kpi = summary?.kpi || {};
-  const users = summary?.users || [];
-  const inventory = summary?.inventory || {};
-  const sellers = summary?.sellers || {};
-  const series = summary?.series || {};
-  const productStats = summary?.products || {};
+  const kpi = useMemo(() => summary?.kpi || {}, [summary]);
+  const users = useMemo(() => summary?.users || [], [summary]);
+  const inventory = useMemo(() => summary?.inventory || {}, [summary]);
+  const sellers = useMemo(() => summary?.sellers || {}, [summary]);
+  const series = useMemo(() => summary?.series || {}, [summary]);
+  const productStats = useMemo(() => summary?.products || {}, [summary]);
 
   const pieData = useMemo(() => {
     const list = Array.isArray(sellers.list) ? sellers.list : [];
@@ -133,28 +145,31 @@ const Dashboard1 = () => {
   }, [sellers]);
 
   const userColumns = [
-    { title: 'Nombre', dataIndex: 'name' },
-    { title: 'Correo', dataIndex: 'email' },
+    { title: 'Nombre', dataIndex: 'name', width: 180 },
+    { title: 'Correo', dataIndex: 'email', width: 220 },
     {
       title: 'Rol',
       dataIndex: 'role',
+      width: 100,
       render: r => (r === 'admin' ? <Tag color="gold">ADMIN</Tag> : <Tag color="blue">ASESOR</Tag>),
     },
-    { title: 'Código', dataIndex: 'code', render: c => <b>{c}</b> },
-    { title: 'Creado', dataIndex: 'createdAt', render: d => (d ? new Date(d).toLocaleDateString() : '') },
+    { title: 'Código', dataIndex: 'code', width: 100, render: c => <b>{c}</b> },
+    { title: 'Creado', dataIndex: 'createdAt', width: 120, render: d => (d ? new Date(d).toLocaleDateString() : '') },
   ];
 
   const invColumns = [
-    { title: 'Producto', dataIndex: 'name' },
-    { title: 'Categoría', dataIndex: 'categoryLabel' },
-    { title: 'Stock total', dataIndex: 'stock', render: v => <b>{v}</b> },
+    { title: 'Producto', dataIndex: 'name', width: 220 },
+    { title: 'Categoría', dataIndex: 'categoryLabel', width: 140 },
+    { title: 'Stock total', dataIndex: 'stock', width: 100, render: v => <b>{v}</b> },
     {
       title: 'Estado por tallas',
+      width: 120,
       render: (_, r) => <Tag color={colorByLevel(r.healthLevel)}>{labelByLevel(r.healthLevel)}</Tag>,
     },
     {
       title: 'Mínimo por talla',
       dataIndex: 'minSizeStock',
+      width: 120,
       render: v => (v === null || v === undefined ? <span style={{ opacity: 0.7 }}>—</span> : <b>{v}</b>),
     },
   ];
@@ -162,22 +177,22 @@ const Dashboard1 = () => {
   const sellerColumns = [
     {
       title: 'Vendedor',
+      width: 220,
       render: (_, r) => (
         <div>
           <div style={{ fontWeight: 800 }}>{r.sellerName}</div>
-          <div style={{ fontSize: 12, opacity: 0.7 }}>
-            Código: <b>{r.sellerCode}</b>
-          </div>
+          <div style={{ fontSize: 12, opacity: 0.7 }}>Código: <b>{r.sellerCode}</b></div>
         </div>
       ),
     },
-    { title: 'Ventas ($)', dataIndex: 'paidTotal', render: v => <b>${Number(v || 0).toFixed(2)}</b> },
-    { title: 'Notas', dataIndex: 'billsCount', render: v => <b>{v}</b> },
-    { title: 'Unidades', dataIndex: 'units', render: v => <b>{v}</b> },
-    { title: 'Ticket prom.', dataIndex: 'ticketAvg', render: v => <b>${Number(v || 0).toFixed(2)}</b> },
+    { title: 'Ventas ($)', dataIndex: 'paidTotal', width: 120, render: v => <b>${Number(v || 0).toFixed(2)}</b> },
+    { title: 'Notas', dataIndex: 'billsCount', width: 80, render: v => <b>{v}</b> },
+    { title: 'Unidades', dataIndex: 'units', width: 90, render: v => <b>{v}</b> },
+    { title: 'Ticket prom.', dataIndex: 'ticketAvg', width: 120, render: v => <b>${Number(v || 0).toFixed(2)}</b> },
     {
       title: 'Descuento',
       dataIndex: 'discountPct',
+      width: 150,
       render: v => (
         <div style={{ minWidth: 130 }}>
           <Progress percent={Math.min(100, Number(v || 0))} size="small" />
@@ -188,35 +203,30 @@ const Dashboard1 = () => {
   ];
 
   const seriesCols = labelKey => [
-    { title: labelKey === 'date' ? 'Día' : labelKey === 'month' ? 'Mes' : 'Año', dataIndex: labelKey },
-    { title: 'Ventas ($)', dataIndex: 'total', render: v => <b>${Number(v || 0).toFixed(2)}</b> },
-    { title: 'Notas', dataIndex: 'count', render: v => <b>{v}</b> },
+    { title: labelKey === 'date' ? 'Día' : labelKey === 'month' ? 'Mes' : 'Año', dataIndex: labelKey, width: 120 },
+    { title: 'Ventas ($)', dataIndex: 'total', width: 130, render: v => <b>${Number(v || 0).toFixed(2)}</b> },
+    { title: 'Notas', dataIndex: 'count', width: 90, render: v => <b>{v}</b> },
   ];
 
   const topProdCols = [
-    { title: 'Producto', dataIndex: 'name' },
-    { title: 'Unidades', dataIndex: 'units', render: v => <b>{v}</b> },
-    { title: 'Ingreso (aprox.)', dataIndex: 'revenue', render: v => <b>${Number(v || 0).toFixed(2)}</b> },
+    { title: 'Producto', dataIndex: 'name', width: 180 },
+    { title: 'Unidades', dataIndex: 'units', width: 90, render: v => <b>{v}</b> },
+    { title: 'Ingreso (aprox.)', dataIndex: 'revenue', width: 120, render: v => <b>${Number(v || 0).toFixed(2)}</b> },
   ];
 
   if (!summary) {
     return (
       <LayoutApp>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-          <h2 style={{ margin: 0 }}>Dashboard</h2>
-          <Button type="primary" onClick={downloadCustomersExcel}>
-            Exportar clientes (Excel)
-          </Button>
-        </div>
+        <h2>Dashboard</h2>
         <div style={{ opacity: 0.7 }}>Cargando...</div>
       </LayoutApp>
     );
   }
 
   const KpiCard = ({ title, value, sub }) => (
-    <Card>
+    <Card bodyStyle={{ padding: 16 }}>
       <div style={{ fontSize: 12, opacity: 0.7 }}>{title}</div>
-      <div style={{ fontSize: 26, fontWeight: 900 }}>{value}</div>
+      <div style={{ fontSize: 26, fontWeight: 900, lineHeight: 1.15 }}>{value}</div>
       {sub ? <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>{sub}</div> : null}
     </Card>
   );
@@ -225,134 +235,181 @@ const Dashboard1 = () => {
   const month = kpi.month || {};
   const year = kpi.year || {};
 
+  const tableWrap = child => (
+    <div style={{ overflowX: 'auto' }}>
+      {child}
+    </div>
+  );
+
   return (
     <LayoutApp>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 12,
+          flexWrap: 'wrap',
+          marginBottom: 14,
+        }}
+      >
         <h2 style={{ margin: 0 }}>Dashboard</h2>
 
-        <Button type="primary" onClick={downloadCustomersExcel}>
-          Exportar clientes (Excel)
-        </Button>
+        <div
+          style={{
+            display: 'flex',
+            gap: 10,
+            flexWrap: 'wrap',
+          }}
+        >
+          <Button onClick={handleExportCustomers}>
+            Exportar clientes
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultActiveKey="today">
         <TabPane tab="Hoy" key="today">
           <Row gutter={[16, 16]}>
-            <Col xs={24} md={6}>
-              <KpiCard title="Ventas" value={`$${Number(today.paidTotal || 0).toFixed(2)}`} sub={`Notas: ${today.billsCount || 0}`} />
-            </Col>
-            <Col xs={24} md={6}>
-              <KpiCard title="Ticket promedio" value={`$${Number(today.ticketAvg || 0).toFixed(2)}`} sub={`Unidades: ${today.units || 0}`} />
-            </Col>
-            <Col xs={24} md={6}>
-              <KpiCard title="Descuento promedio" value={`${Number(today.discountPct || 0).toFixed(2)}%`} sub={`Sugerido: $${Number(today.suggestedTotal || 0).toFixed(2)}`} />
-            </Col>
-            <Col xs={24} md={6}>
-              <KpiCard title="Descuento ($)" value={`$${Number(today.discountAmount || 0).toFixed(2)}`} sub="(solo informativo)" />
-            </Col>
+            <Col xs={24} sm={12} lg={6}><KpiCard title="Ventas" value={`$${Number(today.paidTotal || 0).toFixed(2)}`} sub={`Notas: ${today.billsCount || 0}`} /></Col>
+            <Col xs={24} sm={12} lg={6}><KpiCard title="Ticket promedio" value={`$${Number(today.ticketAvg || 0).toFixed(2)}`} sub={`Unidades: ${today.units || 0}`} /></Col>
+            <Col xs={24} sm={12} lg={6}><KpiCard title="Descuento promedio" value={`${Number(today.discountPct || 0).toFixed(2)}%`} sub={`Sugerido: $${Number(today.suggestedTotal || 0).toFixed(2)}`} /></Col>
+            <Col xs={24} sm={12} lg={6}><KpiCard title="Descuento ($)" value={`$${Number(today.discountAmount || 0).toFixed(2)}`} sub="(solo informativo)" /></Col>
           </Row>
         </TabPane>
 
         <TabPane tab="Este mes" key="month">
           <Row gutter={[16, 16]}>
-            <Col xs={24} md={6}>
-              <KpiCard title="Ventas" value={`$${Number(month.paidTotal || 0).toFixed(2)}`} sub={`Notas: ${month.billsCount || 0}`} />
-            </Col>
-            <Col xs={24} md={6}>
-              <KpiCard title="Ticket promedio" value={`$${Number(month.ticketAvg || 0).toFixed(2)}`} sub={`Unidades: ${month.units || 0}`} />
-            </Col>
-            <Col xs={24} md={6}>
-              <KpiCard title="Descuento promedio" value={`${Number(month.discountPct || 0).toFixed(2)}%`} sub={`Sugerido: $${Number(month.suggestedTotal || 0).toFixed(2)}`} />
-            </Col>
-            <Col xs={24} md={6}>
-              <KpiCard title="Descuento ($)" value={`$${Number(month.discountAmount || 0).toFixed(2)}`} sub="(solo informativo)" />
-            </Col>
+            <Col xs={24} sm={12} lg={6}><KpiCard title="Ventas" value={`$${Number(month.paidTotal || 0).toFixed(2)}`} sub={`Notas: ${month.billsCount || 0}`} /></Col>
+            <Col xs={24} sm={12} lg={6}><KpiCard title="Ticket promedio" value={`$${Number(month.ticketAvg || 0).toFixed(2)}`} sub={`Unidades: ${month.units || 0}`} /></Col>
+            <Col xs={24} sm={12} lg={6}><KpiCard title="Descuento promedio" value={`${Number(month.discountPct || 0).toFixed(2)}%`} sub={`Sugerido: $${Number(month.suggestedTotal || 0).toFixed(2)}`} /></Col>
+            <Col xs={24} sm={12} lg={6}><KpiCard title="Descuento ($)" value={`$${Number(month.discountAmount || 0).toFixed(2)}`} sub="(solo informativo)" /></Col>
           </Row>
         </TabPane>
 
         <TabPane tab="Este año" key="year">
           <Row gutter={[16, 16]}>
-            <Col xs={24} md={6}>
-              <KpiCard title="Ventas" value={`$${Number(year.paidTotal || 0).toFixed(2)}`} sub={`Notas: ${year.billsCount || 0}`} />
-            </Col>
-            <Col xs={24} md={6}>
-              <KpiCard title="Ticket promedio" value={`$${Number(year.ticketAvg || 0).toFixed(2)}`} sub={`Unidades: ${year.units || 0}`} />
-            </Col>
-            <Col xs={24} md={6}>
-              <KpiCard title="Descuento promedio" value={`${Number(year.discountPct || 0).toFixed(2)}%`} sub={`Sugerido: $${Number(year.suggestedTotal || 0).toFixed(2)}`} />
-            </Col>
-            <Col xs={24} md={6}>
-              <KpiCard title="Descuento ($)" value={`$${Number(year.discountAmount || 0).toFixed(2)}`} sub="(solo informativo)" />
-            </Col>
+            <Col xs={24} sm={12} lg={6}><KpiCard title="Ventas" value={`$${Number(year.paidTotal || 0).toFixed(2)}`} sub={`Notas: ${year.billsCount || 0}`} /></Col>
+            <Col xs={24} sm={12} lg={6}><KpiCard title="Ticket promedio" value={`$${Number(year.ticketAvg || 0).toFixed(2)}`} sub={`Unidades: ${year.units || 0}`} /></Col>
+            <Col xs={24} sm={12} lg={6}><KpiCard title="Descuento promedio" value={`${Number(year.discountPct || 0).toFixed(2)}%`} sub={`Sugerido: $${Number(year.suggestedTotal || 0).toFixed(2)}`} /></Col>
+            <Col xs={24} sm={12} lg={6}><KpiCard title="Descuento ($)" value={`$${Number(year.discountAmount || 0).toFixed(2)}`} sub="(solo informativo)" /></Col>
           </Row>
         </TabPane>
       </Tabs>
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col xs={24} lg={10}>
+        <Col xs={24} xl={10}>
           <Card title="Usuarios (admin + asesores)">
-            <Table dataSource={users} columns={userColumns} rowKey="_id" pagination={{ pageSize: 6 }} />
+            {tableWrap(
+              <Table
+                dataSource={users}
+                columns={userColumns}
+                rowKey="_id"
+                pagination={{ pageSize: 6 }}
+                scroll={{ x: 700 }}
+                size="small"
+              />
+            )}
           </Card>
         </Col>
 
-        <Col xs={24} lg={14}>
-          <Card title={`Vendedores (mejor: ${sellers?.bestSeller?.sellerName || '—'} | ${sellers?.bestSeller?.sellerCode || ''})`}>
+        <Col xs={24} xl={14}>
+          <Card
+            title={`Vendedores (mejor: ${sellers?.bestSeller?.sellerName || '—'} | ${sellers?.bestSeller?.sellerCode || ''})`}
+          >
             <SellerPie data={pieData.length ? pieData : [{ label: 'Sin ventas', value: 1 }]} />
             <div style={{ marginTop: 16 }}>
-              <Table
-                dataSource={Array.isArray(sellers.list) ? sellers.list : []}
-                columns={sellerColumns}
-                rowKey={r => `${r.sellerCode}-${r.sellerName}`}
-                pagination={{ pageSize: 6 }}
-              />
+              {tableWrap(
+                <Table
+                  dataSource={Array.isArray(sellers.list) ? sellers.list : []}
+                  columns={sellerColumns}
+                  rowKey={r => `${r.sellerCode}-${r.sellerName}`}
+                  pagination={{ pageSize: 6 }}
+                  scroll={{ x: 900 }}
+                  size="small"
+                />
+              )}
             </div>
           </Card>
         </Col>
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col xs={24} lg={12}>
+        <Col xs={24} xl={12}>
           <Card title="Ventas por día (últimos 30 días)">
-            <Table dataSource={Array.isArray(series.days) ? series.days : []} columns={seriesCols('date')} rowKey="key" pagination={{ pageSize: 8 }} />
+            {tableWrap(
+              <Table
+                dataSource={Array.isArray(series.days) ? series.days : []}
+                columns={seriesCols('date')}
+                rowKey="key"
+                pagination={{ pageSize: 8 }}
+                scroll={{ x: 420 }}
+                size="small"
+              />
+            )}
           </Card>
         </Col>
 
-        <Col xs={24} lg={12}>
+        <Col xs={24} xl={12}>
           <Card title="Ventas por mes (últimos 12 meses)">
-            <Table dataSource={Array.isArray(series.months) ? series.months : []} columns={seriesCols('month')} rowKey="key" pagination={{ pageSize: 8 }} />
+            {tableWrap(
+              <Table
+                dataSource={Array.isArray(series.months) ? series.months : []}
+                columns={seriesCols('month')}
+                rowKey="key"
+                pagination={{ pageSize: 8 }}
+                scroll={{ x: 420 }}
+                size="small"
+              />
+            )}
           </Card>
         </Col>
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col xs={24} lg={12}>
+        <Col xs={24} xl={12}>
           <Card title="Ventas por año (últimos 5 años)">
-            <Table dataSource={Array.isArray(series.years) ? series.years : []} columns={seriesCols('year')} rowKey="key" pagination={false} />
+            {tableWrap(
+              <Table
+                dataSource={Array.isArray(series.years) ? series.years : []}
+                columns={seriesCols('year')}
+                rowKey="key"
+                pagination={false}
+                scroll={{ x: 420 }}
+                size="small"
+              />
+            )}
           </Card>
         </Col>
 
-        <Col xs={24} lg={12}>
+        <Col xs={24} xl={12}>
           <Card title="Productos (Top / Menos vendidos)">
             <Row gutter={[12, 12]}>
               <Col xs={24} md={12}>
                 <div style={{ fontWeight: 800, marginBottom: 8 }}>Top 10</div>
-                <Table
-                  dataSource={Array.isArray(productStats.topProducts) ? productStats.topProducts : []}
-                  columns={topProdCols}
-                  rowKey={(r, i) => `${r.productId || r.name}-${i}`}
-                  pagination={{ pageSize: 5 }}
-                  size="small"
-                />
+                {tableWrap(
+                  <Table
+                    dataSource={Array.isArray(productStats.topProducts) ? productStats.topProducts : []}
+                    columns={topProdCols}
+                    rowKey={(r, i) => `${r.productId || r.name}-${i}`}
+                    pagination={{ pageSize: 5 }}
+                    size="small"
+                    scroll={{ x: 400 }}
+                  />
+                )}
               </Col>
               <Col xs={24} md={12}>
                 <div style={{ fontWeight: 800, marginBottom: 8 }}>Menos vendidos</div>
-                <Table
-                  dataSource={Array.isArray(productStats.lowProducts) ? productStats.lowProducts : []}
-                  columns={topProdCols}
-                  rowKey={(r, i) => `${r.productId || r.name}-${i}`}
-                  pagination={{ pageSize: 5 }}
-                  size="small"
-                />
+                {tableWrap(
+                  <Table
+                    dataSource={Array.isArray(productStats.lowProducts) ? productStats.lowProducts : []}
+                    columns={topProdCols}
+                    rowKey={(r, i) => `${r.productId || r.name}-${i}`}
+                    pagination={{ pageSize: 5 }}
+                    size="small"
+                    scroll={{ x: 400 }}
+                  />
+                )}
               </Col>
             </Row>
           </Card>
@@ -360,17 +417,35 @@ const Dashboard1 = () => {
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col xs={24} lg={24}>
-          <Card title="Inventario por categoría (semaforo por tallas)">
-            <Table dataSource={Array.isArray(inventory.byCategory) ? inventory.byCategory : []} columns={invColumns} rowKey="_id" pagination={{ pageSize: 10 }} />
+        <Col xs={24}>
+          <Card title="Inventario por categoría (semáforo por tallas)">
+            {tableWrap(
+              <Table
+                dataSource={Array.isArray(inventory.byCategory) ? inventory.byCategory : []}
+                columns={invColumns}
+                rowKey="_id"
+                pagination={{ pageSize: 10 }}
+                scroll={{ x: 760 }}
+                size="small"
+              />
+            )}
           </Card>
         </Col>
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col xs={24} lg={24}>
+        <Col xs={24}>
           <Card title="Productos con stock bajo (por tallas)">
-            <Table dataSource={Array.isArray(inventory.lowStockProducts) ? inventory.lowStockProducts : []} columns={invColumns} rowKey="_id" pagination={{ pageSize: 10 }} />
+            {tableWrap(
+              <Table
+                dataSource={Array.isArray(inventory.lowStockProducts) ? inventory.lowStockProducts : []}
+                columns={invColumns}
+                rowKey="_id"
+                pagination={{ pageSize: 10 }}
+                scroll={{ x: 760 }}
+                size="small"
+              />
+            )}
           </Card>
         </Col>
       </Row>

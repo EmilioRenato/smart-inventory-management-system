@@ -10,9 +10,15 @@ const Product = ({ product, enableSizeSelect = false }) => {
     const [rows, setRows] = useState([]);
 
     const sizes = useMemo(() => {
-        const list = Array.isArray(product?.sizeStocks) ? product.sizeStocks : [];
+        const list = Array.isArray(product?.sizeStocks)
+            ? product.sizeStocks
+            : [];
+
         return list
-            .map(x => ({ size: String(x.size), stock: Number(x.stock || 0) }))
+            .map(x => ({
+                size: String(x.size),
+                stock: Number(x.stock || 0),
+            }))
             .filter(x => x.size && x.stock > 0);
     }, [product]);
 
@@ -24,17 +30,20 @@ const Product = ({ product, enableSizeSelect = false }) => {
             return;
         }
 
-        // Si NO pedimos tallas, agrega 1 directo
-        if (!enableSizeSelect || !Array.isArray(product?.sizeStocks) || product.sizeStocks.length === 0) {
+        if (
+            !enableSizeSelect ||
+            !Array.isArray(product?.sizeStocks) ||
+            product.sizeStocks.length === 0
+        ) {
             dispatch({
                 type: 'ADD_TO_CART',
                 payload: { ...product, quantity: 1 },
             });
+
             message.success('Agregado al carrito');
             return;
         }
 
-        // Tabla de tallas
         const initial = sizes.map(s => ({
             key: String(s.size),
             size: String(s.size),
@@ -66,9 +75,10 @@ const Product = ({ product, enableSizeSelect = false }) => {
             }
         }
 
-        // 1 item por talla
         selected.forEach(r => {
-            const sizeOrders = [{ size: String(r.size), quantity: Number(r.qty) }];
+            const sizeOrders = [
+                { size: String(r.size), quantity: Number(r.qty) },
+            ];
             const cartKey = `${product._id}|${String(r.size)}`;
 
             dispatch({
@@ -100,10 +110,13 @@ const Product = ({ product, enableSizeSelect = false }) => {
                     onChange={val => {
                         setRows(prev =>
                             prev.map(r =>
-                                r.key === record.key ? { ...r, qty: Number(val || 0) } : r
+                                r.key === record.key
+                                    ? { ...r, qty: Number(val || 0) }
+                                    : r
                             )
                         );
                     }}
+                    style={{ width: '100%' }}
                 />
             ),
         },
@@ -113,51 +126,142 @@ const Product = ({ product, enableSizeSelect = false }) => {
         <>
             <Card
                 hoverable
-                style={{ width: 240, marginBottom: 30 }}
+                style={{
+                    width: '100%',
+                    marginBottom: 0,
+                    borderRadius: 16,
+                    overflow: 'hidden',
+                }}
+                bodyStyle={{
+                    padding: 14,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10,
+                }}
                 cover={
-                    <img
-                        alt={product?.name}
-                        src={product?.image}
-                        style={{ height: 200, objectFit: 'cover' }}
-                        onError={e => {
-                            e.currentTarget.src = 'https://via.placeholder.com/240x200?text=IMG';
+                    <div
+                        style={{
+                            width: '100%',
+                            height: 220,
+                            overflow: 'hidden',
+                            background: '#f7f7f7',
                         }}
-                    />
+                    >
+                        <img
+                            alt={product?.name}
+                            src={product?.image}
+                            style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                display: 'block',
+                            }}
+                            onError={e => {
+                                e.currentTarget.src =
+                                    'https://via.placeholder.com/500x350?text=IMG';
+                            }}
+                        />
+                    </div>
                 }
             >
-                <Meta title={product?.name} />
-                <Meta title={`Precio: $${product?.price}`} />
+                <Meta
+                    title={
+                        <div
+                            style={{
+                                fontSize: 15,
+                                fontWeight: 700,
+                                lineHeight: 1.3,
+                                minHeight: 40,
+                            }}
+                        >
+                            {product?.name}
+                        </div>
+                    }
+                />
 
-                <p>
-                    Stock:{' '}
-                    {Number(product?.stock || 0) < 10 ? (
-                        <span style={{ color: 'red' }}>{product?.stock}</span>
-                    ) : (
-                        <span style={{ color: 'green' }}>{product?.stock}</span>
-                    )}
-                </p>
+                <div
+                    style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: 10,
+                        flexWrap: 'wrap',
+                    }}
+                >
+                    <div style={{ fontSize: 18, fontWeight: 800 }}>
+                        ${Number(product?.price || 0).toFixed(2)}
+                    </div>
 
-                {Number(product?.stock || 0) === 0 && <Meta title="Estado:" description="Sin stock" />}
+                    <div style={{ fontSize: 14 }}>
+                        Stock:{' '}
+                        {Number(product?.stock || 0) < 10 ? (
+                            <span style={{ color: 'red', fontWeight: 700 }}>
+                                {product?.stock}
+                            </span>
+                        ) : (
+                            <span style={{ color: 'green', fontWeight: 700 }}>
+                                {product?.stock}
+                            </span>
+                        )}
+                    </div>
+                </div>
 
-                <div className="product-btn">
-                    <Button onClick={openModal}>Agregar al carrito</Button>
+                {Number(product?.stock || 0) === 0 && (
+                    <div
+                        style={{
+                            background: '#fff1f0',
+                            color: '#cf1322',
+                            border: '1px solid #ffa39e',
+                            borderRadius: 10,
+                            padding: '6px 10px',
+                            fontSize: 13,
+                            fontWeight: 600,
+                        }}
+                    >
+                        Sin stock
+                    </div>
+                )}
+
+                <div className="product-btn" style={{ marginTop: 4 }}>
+                    <Button
+                        onClick={openModal}
+                        block
+                        disabled={Number(product?.stock || 0) === 0}
+                    >
+                        Agregar al carrito
+                    </Button>
                 </div>
             </Card>
 
             <Modal
                 title={`Selecciona tallas: ${product?.name || ''}`}
-                visible={modalVisible}          // ✅ AntD v4 usa visible
+                visible={modalVisible}
                 onCancel={closeModal}
+                width={700}
+                bodyStyle={{ padding: 12 }}
                 footer={[
                     <Button key="cancel" onClick={closeModal}>
                         Cancelar
                     </Button>,
-                    <Button key="ok" type="primary" onClick={addToCartWithSizes}>
+                    <Button
+                        key="ok"
+                        type="primary"
+                        onClick={addToCartWithSizes}
+                    >
                         Confirmar
                     </Button>,
                 ]}
             >
-                <Table dataSource={rows} columns={columns} pagination={false} rowKey="key" bordered />
+                <div style={{ overflowX: 'auto' }}>
+                    <Table
+                        dataSource={rows}
+                        columns={columns}
+                        pagination={false}
+                        rowKey="key"
+                        bordered
+                        size="small"
+                    />
+                </div>
             </Modal>
         </>
     );
