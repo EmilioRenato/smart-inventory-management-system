@@ -78,7 +78,7 @@ const Login = () => {
                 </Form>
             </div>
 
-            <small>Powered by Binary Brigade</small>
+            <small>Powered by Emilio Villavicencio</small>
         </div>
     );
 };

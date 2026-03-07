@@ -3,10 +3,12 @@ import mongoose from 'mongoose';
 const customerSchema = new mongoose.Schema(
   {
     cedula: { type: String, required: true, trim: true },
-
     name: { type: String, required: true, trim: true },
     phone: { type: Number, required: true },
     address: { type: String, required: true, trim: true },
+
+    // ✅ nuevo
+    email: { type: String, trim: true, lowercase: true, default: '' },
 
     createdBy: { type: String, required: true },
   },

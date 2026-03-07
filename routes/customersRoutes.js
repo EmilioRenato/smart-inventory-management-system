@@ -16,7 +16,7 @@ customerRouter.get('/get-customers', getCustomerController);
 // Autocompletar por cédula/RUC
 customerRouter.get('/get-customer-by-cedula', getCustomerByCedulaController);
 
-// ✅ Export Excel (opcional: ?createdBy=xxxx)
+// Export Excel
 customerRouter.get('/export-excel', exportCustomersExcelController);
 
 customerRouter.post('/add-customers', addCustomerController);

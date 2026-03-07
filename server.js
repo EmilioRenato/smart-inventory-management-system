@@ -11,6 +11,8 @@ import customerRouter from './routes/customersRoutes.js';
 import productRouter from './routes/productsRoutes.js';
 import userRouter from './routes/userRoutes.js';
 import dashboardRouter from './routes/dashboardRoutes.js';
+import sriRouter from './routes/sriRoutes.js';
+
 
 dotenv.config();
 
@@ -39,6 +41,7 @@ app.use('/api/users', userRouter);
 app.use('/api/bills', billsRouter);
 app.use('/api/customers', customerRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/sri', sriRouter);
 
 // ✅ Servir React en PRODUCCIÓN (1 solo link)
 const __filename = fileURLToPath(import.meta.url);
